@@ -78,6 +78,31 @@ def _preparar(raiz: Path) -> tuple[Instalacion, Path]:
     return inst, descargas
 
 
+def _probar_arrastre(app, ventana, raiz: Path) -> None:
+    """Recorre el ciclo entero de arrastre, que es donde vive el velo."""
+    from PySide6.QtCore import QMimeData, QPoint, Qt, QUrl
+    from PySide6.QtGui import QDragEnterEvent, QDropEvent
+
+    suelto = _pack(raiz / "fuera" / "Arrastrado.mcpack", "Arrastrado", "uuid-drag")
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(suelto))])
+    posicion = QPoint(10, 10)
+    botones = Qt.MouseButton.LeftButton
+    sin_teclas = Qt.KeyboardModifier.NoModifier
+
+    ventana.dragEnterEvent(
+        QDragEnterEvent(posicion, Qt.DropAction.CopyAction, mime, botones, sin_teclas)
+    )
+    app.processEvents()
+    assert ventana._velo.isVisible(), "el velo no apareció al arrastrar"
+
+    ventana.dropEvent(
+        QDropEvent(posicion, Qt.DropAction.CopyAction, mime, botones, sin_teclas)
+    )
+    app.processEvents()
+    assert not ventana._velo.isVisible(), "el velo se quedó puesto tras soltar"
+
+
 def main() -> int:
     app = QApplication(sys.argv)
     aplicar(app, Acento.ORO, Modo.OSCURO)
@@ -114,6 +139,8 @@ def main() -> int:
         for indice in range(3):
             ventana._tabs.setCurrentIndex(indice)
             app.processEvents()
+
+        _probar_arrastre(app, ventana, raiz)
 
         assert store.historial(), "el historial quedó vacío"
 

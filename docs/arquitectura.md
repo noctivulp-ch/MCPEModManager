@@ -40,9 +40,10 @@ MCPEModManager/
 │   │   ├── ventana.py           # Selector de instalación + pestañas
 │   │   ├── panel_lista.py       # Base de los tres paneles
 │   │   ├── panel_instalados.py
-│   │   ├── panel_descargas.py
+│   │   ├── panel_descargas.py   # Pestaña «Carpetas»
 │   │   ├── panel_historial.py
 │   │   ├── estilo.py            # Colores derivados de la laca activa
+│   │   ├── soltar.py            # Qué hacer con lo que se arrastra a la ventana
 │   │   └── widgets/
 │   ├── senales.py          # Conexión de señales que sobrevive a Nuitka
 │   └── main.py

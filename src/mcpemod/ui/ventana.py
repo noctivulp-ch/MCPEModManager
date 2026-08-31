@@ -2,24 +2,26 @@
 
 from __future__ import annotations
 
+from PySide6.QtGui import QDragEnterEvent, QDragLeaveEvent, QDropEvent
 from PySide6.QtWidgets import (
     QComboBox, QHBoxLayout, QLabel, QMainWindow, QTabWidget, QWidget,
 )
 
-from wulf_qt import GAP_CELDA, Bandeja, Pozo
+from wulf_qt import GAP_CELDA, Bandeja, Pozo, mostrar_aviso
 
 from mcpemod.core import Instalacion, Installer, Scanner, Store
 from mcpemod.senales import conectar
-from mcpemod.ui.estilo import TEXTO_SECUNDARIO
+from mcpemod.ui import soltar
 from mcpemod.ui.panel_descargas import PanelDescargas
 from mcpemod.ui.panel_historial import PanelHistorial
 from mcpemod.ui.panel_instalados import PanelInstalados
+from mcpemod.ui.widgets import VeloSoltar, boton_ruta
 
 _TITULO = "MCPE Mod Manager"
 _ANCHO_MIN = 820
 _ALTO_MIN = 560
 
-_TAB_DESCARGAS = 1
+_TAB_CARPETAS = 1
 _TAB_HISTORIAL = 2
 
 
@@ -38,6 +40,9 @@ class VentanaPrincipal(QMainWindow):
         self._instalaciones = instalaciones
         self._construir()
         conectar(scanner.instalados_cambiados, self._panel_historial.recargar)
+
+        self._velo = VeloSoltar(self)
+        self.setAcceptDrops(True)
 
     def _construir(self) -> None:
         self.setWindowTitle(_TITULO)
@@ -62,7 +67,7 @@ class VentanaPrincipal(QMainWindow):
         self._tabs = QTabWidget()
         self._tabs.setDocumentMode(True)
         self._tabs.addTab(self._panel_instalados, "Instalado")
-        self._tabs.addTab(self._panel_descargas, "Descargas")
+        self._tabs.addTab(self._panel_descargas, "Carpetas")
         self._tabs.addTab(self._panel_historial, "Historial")
         conectar(self._tabs.currentChanged, self._al_cambiar_tab)
 
@@ -76,7 +81,7 @@ class VentanaPrincipal(QMainWindow):
         ciegas sobre una que quizá no es la que se juega.
         """
         contenedor = QWidget()
-        fila = QHBoxLayout(contenedor)
+        self._fila_barra = fila = QHBoxLayout(contenedor)
         fila.setContentsMargins(0, 0, 0, 0)
         fila.setSpacing(GAP_CELDA)
 
@@ -94,17 +99,18 @@ class VentanaPrincipal(QMainWindow):
         conectar(self._combo.currentIndexChanged, self._al_elegir_instalacion)
         fila.addWidget(self._combo, stretch=1)
 
-        # Las carpetas vigiladas se listan en la pestaña de Descargas, que es
-        # donde se gestionan; repetirlas aquí solo cabría si fueran una.
-        self._lbl_ruta = QLabel()
-        self._lbl_ruta.setStyleSheet(f"color: {TEXTO_SECUNDARIO}; font-size: 10px;")
-        fila.addWidget(self._lbl_ruta)
+        # Las carpetas vigiladas se listan en la pestaña Carpetas, que es donde
+        # se gestionan; repetirlas aquí solo cabría si fueran una.
+        self._boton_ruta = boton_ruta(self._scanner.instalacion.com_mojang)
+        fila.addWidget(self._boton_ruta)
 
-        self._actualizar_ruta()
         return Pozo(contenedor)
 
     def _actualizar_ruta(self) -> None:
-        self._lbl_ruta.setText(f"Juego: {self._scanner.instalacion.com_mojang}")
+        nuevo = boton_ruta(self._scanner.instalacion.com_mojang)
+        self._fila_barra.replaceWidget(self._boton_ruta, nuevo)
+        self._boton_ruta.deleteLater()
+        self._boton_ruta = nuevo
 
     def _al_elegir_instalacion(self, indice: int) -> None:
         instalacion = self._combo.itemData(indice)
@@ -114,8 +120,30 @@ class VentanaPrincipal(QMainWindow):
         self._scanner.cambiar_instalacion(instalacion)
         self._actualizar_ruta()
 
+    # ── Arrastrar y soltar ────────────────────────────────────────────────────
+
+    def dragEnterEvent(self, evento: QDragEnterEvent) -> None:  # noqa: N802 (API de Qt)
+        if soltar.admite(soltar.rutas_de(evento.mimeData())):
+            evento.acceptProposedAction()
+            self._velo.mostrar_sobre(self.centralWidget())
+
+    def dragLeaveEvent(self, evento: QDragLeaveEvent) -> None:  # noqa: N802 (API de Qt)
+        self._velo.hide()
+        super().dragLeaveEvent(evento)
+
+    def dropEvent(self, evento: QDropEvent) -> None:  # noqa: N802 (API de Qt)
+        self._velo.hide()
+        rutas = soltar.rutas_de(evento.mimeData())
+        if not soltar.admite(rutas):
+            return
+        evento.acceptProposedAction()
+
+        resultado = soltar.procesar(rutas, self._scanner, self._installer)
+        if resultado.hubo_algo or resultado.ignorados:
+            mostrar_aviso(self, resultado.mensaje())
+
     def _al_cambiar_tab(self, indice: int) -> None:
-        if indice == _TAB_DESCARGAS:
+        if indice == _TAB_CARPETAS:
             self._panel_descargas.marcar_vistas()
         elif indice == _TAB_HISTORIAL:
             self._panel_historial.recargar()

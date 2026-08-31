@@ -12,3 +12,4 @@
 | [0008](0008-workaround-nuitka-pyside-connect.md) | Envolver los slots al conectar señales (workaround de Nuitka) | Aceptada |
 | [0013](0013-carpetas-vigiladas-multiples.md) | Varias carpetas vigiladas, y ninguna es intocable | Aceptada |
 | [0014](0014-forma-de-instalacion.md) | La forma de instalación se describe, no se juzga | Aceptada |
+| [0015](0015-arrastrar-y-soltar.md) | Arrastrar decide por lo que es cada cosa | Aceptada |

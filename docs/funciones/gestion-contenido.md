@@ -123,12 +123,28 @@ Cada acción se registra con `accion` (`instalar` · `actualizar` · `normalizar
 muestra del más reciente al más antiguo; cuando dos caen en el mismo instante,
 desempata el `id`.
 
+## Arrastrar y soltar
+
+Se puede soltar cualquier cosa sobre la ventana, desde donde sea:
+
+| Lo que se suelta | Qué pasa |
+|---|---|
+| Archivo que es contenido de Bedrock | Se instala |
+| Carpeta | Se añade a las vigiladas |
+| Cualquier otra cosa | Se avisa, y nada más |
+
+Una carpeta no se intenta instalar aunque tenga un `manifest.json` dentro: es
+ambigua, y vigilarla no destruye nada mientras que instalarla por error sí.
+
+Soltar varios a la vez funciona; el aviso final resume qué pasó con cada uno.
+Ver [ADR 0015](../decisiones/0015-arrastrar-y-soltar.md).
+
 ## Carpetas vigiladas
 
 El gestor busca contenido descargado en una lista de carpetas, no en una sola.
 Arranca con la del sistema (`xdg-user-dir DOWNLOAD`; en un escritorio en español,
-`~/Descargas`), y desde la pestaña de Descargas se pueden añadir otras y quitar
-cualquiera — la inicial no tiene estatus especial.
+`~/Descargas`), y desde la pestaña **Carpetas** se pueden añadir otras —con el
+botón o arrastrándolas— y quitar cualquiera: la inicial no tiene estatus especial.
 
 Siempre queda al menos una: quedarse sin ninguna dejaría la pestaña vacía para
 siempre y sin nada que pulsar para recuperarla. Con una sola carpeta el botón de
@@ -151,3 +167,11 @@ un archivo solo se relee si cambió.
 
 Tras una acción de la propia app se llama a `Scanner.notificar_cambio()` en vez
 de esperar al watcher. Ver [ADR 0005](../decisiones/0005-qfilesystemwatcher-para-monitoreo.md).
+
+## Rutas del sistema en la interfaz
+
+Las rutas que muestra la app (la de la instalación activa y las carpetas
+vigiladas) son botones, no texto: un clic las abre en el explorador de archivos,
+que es lo que se quiere hacer con ellas casi siempre. Se abrevian con `~` y se
+recortan por la izquierda cuando no caben — el final identifica el sitio mucho
+mejor que el principio, que casi siempre es `~/.local/share`.

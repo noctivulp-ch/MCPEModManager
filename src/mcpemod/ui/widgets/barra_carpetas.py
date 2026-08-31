@@ -10,12 +10,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from wulf_qt import GAP_CELDA, PARED, boton_plano
 
-from mcpemod.ui.estilo import GRIS, TEXTO_SECUNDARIO
+from mcpemod.ui.estilo import TEXTO_SECUNDARIO
+from mcpemod.ui.widgets.boton_ruta import boton_ruta
 
 
 class BarraCarpetas(QWidget):
@@ -38,7 +39,7 @@ class BarraCarpetas(QWidget):
         cabecera = QHBoxLayout()
         cabecera.setSpacing(GAP_CELDA // 2)
 
-        titulo = QLabel("Buscando contenido en:")
+        titulo = QLabel("Buscando contenido descargado en:")
         titulo.setStyleSheet(f"color: {TEXTO_SECUNDARIO}; font-size: 11px;")
         cabecera.addWidget(titulo)
         cabecera.addStretch()
@@ -63,13 +64,7 @@ class BarraCarpetas(QWidget):
         fila.setContentsMargins(GAP_CELDA // 2, 0, 0, 0)
         fila.setSpacing(GAP_CELDA // 2)
 
-        existe = carpeta.is_dir()
-        lbl = QLabel(str(carpeta) if existe else f"{carpeta}   (no existe)")
-        lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        lbl.setStyleSheet(
-            f"color: {TEXTO_SECUNDARIO if existe else GRIS}; font-size: 11px;"
-        )
-        fila.addWidget(lbl)
+        fila.addWidget(boton_ruta(carpeta))
         fila.addStretch()
 
         if quitable:
