@@ -39,8 +39,9 @@ def _publicacion(titulo="Bonito", autor="Alguien", id="p-1", url_archivo="https:
     )
 
 
-def _manifiesto(uuid, version="2.0.0"):
-    return Manifiesto(uuid=uuid, nombre="X", version=version, tipos=frozenset({"resources"}))
+def _manifiesto(uuid, version="2.0.0", nombre="Bonito"):
+    return Manifiesto(uuid=uuid, nombre=nombre, version=version,
+                      tipos=frozenset({"resources"}))
 
 
 class FuenteFalsa:
@@ -124,8 +125,8 @@ def test_a_igualdad_de_autor_manda_el_titulo():
 
 # --- confirmación por uuid ---
 
-def test_confirma_cuando_el_uuid_coincide(store, remoto):
-    remoto["por_url"]["https://cdn/a.mcpack"] = _manifiesto("u-1", "2.0.0")
+def test_confirma_y_detecta_la_version_nueva(store, remoto):
+    remoto["por_url"]["https://cdn/a.mcpack"] = _manifiesto("u-2", "2.0.0", "Bonito")
     fuente = FuenteFalsa({"Bonito": [_publicacion()]})
 
     r = Buscador(store, [fuente]).comprobar(_instalado(uuid="u-1", version="1.0.0"))
@@ -134,13 +135,41 @@ def test_confirma_cuando_el_uuid_coincide(store, remoto):
     assert r.estado == EstadoVersion.NUEVA
     assert r.hay_actualizacion
 
-def test_uuid_distinto_no_confirma(store, remoto):
-    """Diez packs pueden llamarse igual; solo uno tiene el uuid del instalado."""
-    remoto["por_url"]["https://cdn/a.mcpack"] = _manifiesto("otro-uuid")
+def test_otro_pack_no_confirma(store, remoto):
+    """Ni el uuid ni el nombre coinciden: es otro pack."""
+    remoto["por_url"]["https://cdn/a.mcpack"] = _manifiesto("otro-uuid", nombre="Otra cosa")
     fuente = FuenteFalsa({"Bonito": [_publicacion(autor="Ajeno")]})
 
     r = Buscador(store, [fuente]).comprobar(_instalado(uuid="u-1"))
     assert r.confianza is not Confianza.CONFIRMADO
+
+def test_confirma_por_nombre_aunque_cambie_el_uuid(store, remoto):
+    """Hay autores que cambian el uuid en cada versión; el nombre es lo estable."""
+    remoto["por_url"]["https://cdn/a.mcpack"] = _manifiesto("uuid-nuevo", "2.0.0", "Bonito")
+    fuente = FuenteFalsa({"Bonito": [_publicacion()]})
+
+    r = Buscador(store, [fuente]).comprobar(_instalado(uuid="uuid-viejo", version="1.0.0"))
+    assert r.confianza is Confianza.CONFIRMADO
+    assert r.hay_actualizacion
+
+def test_confirma_por_uuid_aunque_cambie_el_nombre(store, remoto):
+    """Otros meten la versión en el nombre y mantienen el uuid."""
+    remoto["por_url"]["https://cdn/a.mcpack"] = _manifiesto("u-1", "1.3.1", "Hide Armor | V1.3.1")
+    fuente = FuenteFalsa({"Hide Armor | V1.2": [_publicacion(titulo="Hide Armor")]})
+
+    r = Buscador(store, [fuente]).comprobar(
+        _instalado(nombre="Hide Armor | V1.2", uuid="u-1", version="1.2.0"))
+    assert r.confianza is Confianza.CONFIRMADO
+
+def test_el_mismo_uuid_publicado_no_es_una_actualizacion(store, remoto):
+    """Si el uuid es el mismo, es la versión que ya está — diga lo que diga el
+    número de versión, que algunos autores suben sin cambiar el contenido."""
+    remoto["por_url"]["https://cdn/a.mcpack"] = _manifiesto("u-1", "9.9.9")
+    fuente = FuenteFalsa({"Bonito": [_publicacion()]})
+
+    r = Buscador(store, [fuente]).comprobar(_instalado(uuid="u-1", version="1.0.0"))
+    assert r.misma_version
+    assert not r.hay_actualizacion
 
 def test_no_encontrado_si_no_hay_candidatos(store, remoto):
     r = Buscador(store, [FuenteFalsa()]).comprobar(_instalado())
@@ -156,9 +185,9 @@ def test_un_archivo_ilegible_no_empareja(store, remoto):
 
 # --- coincidencia probable ---
 
-def test_mismo_autor_y_titulo_pero_otro_uuid_es_probable(store, remoto):
-    """Hay autores que cambian el uuid al publicar una versión mayor."""
-    remoto["por_url"]["https://cdn/a.mcpack"] = _manifiesto("uuid-nuevo")
+def test_mismo_autor_y_titulo_pero_otro_pack_es_probable(store, remoto):
+    """El manifiesto publicado no confirma, pero el parecido es fuerte."""
+    remoto["por_url"]["https://cdn/a.mcpack"] = _manifiesto("uuid-nuevo", nombre="Otra cosa")
     fuente = FuenteFalsa({"Bonito": [_publicacion(titulo="Bonito", autor="Alguien")]})
 
     r = Buscador(store, [fuente]).comprobar(_instalado(uuid="u-viejo", autores=("Alguien",)))
@@ -167,7 +196,7 @@ def test_mismo_autor_y_titulo_pero_otro_uuid_es_probable(store, remoto):
 
 def test_una_probable_no_cuenta_como_actualizacion(store, remoto):
     """Instalarla encima podría sobrescribir con un pack que no es el mismo."""
-    remoto["por_url"]["https://cdn/a.mcpack"] = _manifiesto("uuid-nuevo")
+    remoto["por_url"]["https://cdn/a.mcpack"] = _manifiesto("uuid-nuevo", nombre="Otra cosa")
     fuente = FuenteFalsa({"Bonito": [_publicacion(autor="Alguien")]})
 
     r = Buscador(store, [fuente]).comprobar(_instalado(uuid="u-viejo", version="1.0.0"))
@@ -176,7 +205,7 @@ def test_una_probable_no_cuenta_como_actualizacion(store, remoto):
 
 def test_sin_autor_no_hay_probable(store, remoto):
     """Solo el título es demasiado poco: el catálogo está lleno de homónimos."""
-    remoto["por_url"]["https://cdn/a.mcpack"] = _manifiesto("uuid-nuevo")
+    remoto["por_url"]["https://cdn/a.mcpack"] = _manifiesto("uuid-nuevo", nombre="Otra cosa")
     fuente = FuenteFalsa({"Bonito": [_publicacion(autor="Cualquiera")]})
 
     r = Buscador(store, [fuente]).comprobar(_instalado(uuid="u-1", autores=()))
@@ -187,7 +216,7 @@ def test_sin_autor_no_hay_probable(store, remoto):
 
 def test_no_pasa_del_presupuesto_de_lecturas(store, remoto):
     """Sin techo, un pack con candidatos pesados se lleva minutos él solo."""
-    muchos = [_publicacion(titulo="Bonito", autor="Nadie", id=f"p-{i}",
+    muchos = [_publicacion(titulo="Otro", autor="Nadie", id=f"p-{i}",
                            url_archivo=f"https://cdn/{i}.mcpack") for i in range(20)]
     fuente = FuenteFalsa({c: muchos for c in _consultas(_instalado(nombre="Bonito Pack Grande"))})
 

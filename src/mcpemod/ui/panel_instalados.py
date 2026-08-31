@@ -41,7 +41,7 @@ class PanelInstalados(PanelLista):
 
     def _normalizar(self, pieza: Instalado) -> None:
         try:
-            self._installer.normalizar(pieza, self._scanner.indice_por_uuid())
+            self._installer.normalizar(pieza, self._scanner.indice())
         except (ErrorInstalacion, OSError) as e:
             self._avisar(str(e))
         self._scanner.notificar_cambio()

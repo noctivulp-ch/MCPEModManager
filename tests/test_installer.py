@@ -62,9 +62,12 @@ def test_pack_con_carpeta_contenedora_se_aplana(installer, instalacion, tmp_path
     _instalar(installer, pack(tmp_path / "x.mcpack", prefijo="Mi Pack/", nombre="Bonito"))
     assert (instalacion.resource_packs / "Bonito" / "manifest.json").is_file()
 
-def test_nombre_de_carpeta_legible(installer, instalacion, tmp_path):
-    _instalar(installer, pack(tmp_path / "x.mcpack", nombre="Hide Armor | V1.2"))
-    assert (instalacion.resource_packs / "Hide Armor V1.2").is_dir()
+def test_la_carpeta_se_nombra_como_lo_haria_el_juego(installer, instalacion, tmp_path):
+    """No es cosmético: el juego deriva la carpeta del nombre del pack, y si ya
+    existe reemplaza su contenido. Con otro nombre, el mismo pack acabaría dos
+    veces — una por cada vía de instalación."""
+    _instalar(installer, pack(tmp_path / "x.mcpack", nombre="§fHide §bArmor§6 | §aV1.2§r"))
+    assert (instalacion.resource_packs / "HideArmorV").is_dir()
 
 def test_nombre_de_carpeta_sin_caracteres_ilegales():
     assert nombre_de_carpeta("a/b:c*d?e") == "abcde"
@@ -73,39 +76,67 @@ def test_nombre_de_carpeta_sin_caracteres_ilegales():
 
 # --- dedupe por uuid ---
 
-def test_reinstalar_reutiliza_la_carpeta_existente(installer, instalacion, tmp_path, store):
-    """El caso real: el pack lo importó el juego con otro nombre de carpeta.
+def test_actualizar_reutiliza_la_carpeta_aunque_cambie_el_uuid(installer, instalacion,
+                                                               tmp_path, store):
+    """El caso que obligó a rehacer la identidad.
 
-    El juego localiza los packs por uuid, así que crear una carpeta nueva
-    dejaría el mismo pack dos veces en la lista del juego.
+    Hay autores que cambian el `header.uuid` en cada publicación. Lo estable es
+    el nombre, y es lo que usa el juego: misma carpeta destino, contenido
+    reemplazado. Emparejando por uuid quedarían las dos versiones instaladas.
     """
-    ajena = instalacion.resource_packs / "HideArmorV"
+    ajena = instalacion.resource_packs / "DéesseUIPa"
     ajena.mkdir()
     (ajena / "manifest.json").write_text(
-        json.dumps(manifiesto(nombre="Hide Armor", uuid="uuid-hide", version=(1, 2, 0)))
+        json.dumps(manifiesto(nombre="Déesse UI Pack", uuid="uuid-v131",
+                              version=(1, 3, 1)))
     )
-    previo = Instalado(uuid="uuid-hide", nombre="Hide Armor", version="1.2.0",
+    previo = Instalado(uuid="uuid-v131", nombre="Déesse UI Pack", version="1.3.1",
                        categoria=Categoria.RECURSO, ruta=ajena)
 
     _instalar(installer,
-              pack(tmp_path / "Hide Armor v1.3.mcpack", nombre="Hide Armor",
-                   uuid="uuid-hide", version=(1, 3, 0)),
-              {"uuid-hide": previo})
+              pack(tmp_path / "deesse.mcpack", nombre="Déesse UI Pack",
+                   uuid="uuid-v139-distinto", version=(1, 3, 9)),
+              {previo.clave: previo})
+
+    assert sorted(p.name for p in instalacion.resource_packs.iterdir()) == ["DéesseUIPa"]
+    assert store.historial()[0].accion == "actualizar"
+    assert store.historial()[0].version_anterior == "1.3.1"
+
+def test_la_version_en_el_nombre_no_impide_reconocerlo(installer, instalacion, tmp_path):
+    """Otros autores meten la versión dentro del `header.name`."""
+    ajena = instalacion.resource_packs / "HideArmorV"
+    ajena.mkdir()
+    (ajena / "manifest.json").write_text(
+        json.dumps(manifiesto(nombre="Hide Armor | V1.2", uuid="u", version=(1, 2, 0)))
+    )
+    previo = Instalado(uuid="u", nombre="Hide Armor | V1.2", version="1.2.0",
+                       categoria=Categoria.RECURSO, ruta=ajena)
+
+    _instalar(installer,
+              pack(tmp_path / "hide.mcpack", nombre="Hide Armor | V1.3.1",
+                   uuid="u", version=(1, 3, 1)),
+              {previo.clave: previo})
 
     assert sorted(p.name for p in instalacion.resource_packs.iterdir()) == ["HideArmorV"]
-    assert store.historial()[0].accion == "actualizar"
-    assert store.historial()[0].version_anterior == "1.2.0"
 
 def test_dos_packs_distintos_conviven(installer, instalacion, tmp_path):
     _instalar(installer, pack(tmp_path / "a.mcpack", nombre="Uno", uuid="u-1"))
     _instalar(installer, pack(tmp_path / "b.mcpack", nombre="Dos", uuid="u-2"))
     assert len(list(instalacion.resource_packs.iterdir())) == 2
 
-def test_mismo_nombre_distinto_uuid_no_se_pisan(installer, instalacion, tmp_path):
-    """Dos packs pueden llamarse igual siendo distintos; no pueden compartir carpeta."""
-    _instalar(installer, pack(tmp_path / "a.mcpack", nombre="Pack", uuid="u-1"))
-    _instalar(installer, pack(tmp_path / "b.mcpack", nombre="Pack", uuid="u-2"))
-    assert sorted(p.name for p in instalacion.resource_packs.iterdir()) == ["Pack", "Pack (1)"]
+def test_packs_hermanos_no_se_pisan(installer, instalacion, tmp_path):
+    """«Better Foliage Texture Pack NG» y «… FG» son packs distintos que conviven.
+
+    Sus nombres solo chocan tras el recorte a diez caracteres, y ahí el sufijo
+    los separa — igual que hace el juego.
+    """
+    _instalar(installer, pack(tmp_path / "a.mcpack",
+                              nombre="Better Foliage Texture Pack NG", uuid="u-1"))
+    _instalar(installer, pack(tmp_path / "b.mcpack",
+                              nombre="Better Foliage Texture Pack FG", uuid="u-2"))
+    assert sorted(p.name for p in instalacion.resource_packs.iterdir()) == [
+        "BetterFoli", "BetterFoli (1)"
+    ]
 
 def test_reinstalar_limpia_lo_anterior(installer, instalacion, tmp_path):
     escribir_zip(tmp_path / "a.mcpack", {
@@ -116,12 +147,13 @@ def test_reinstalar_limpia_lo_anterior(installer, instalacion, tmp_path):
     carpeta = instalacion.resource_packs / "P"
     previo = Instalado(uuid="u", nombre="P", version="1.0.0",
                        categoria=Categoria.RECURSO, ruta=carpeta)
+    indice = {previo.clave: previo}
 
     escribir_zip(tmp_path / "b.mcpack", {
         "manifest.json": json.dumps(manifiesto(nombre="P", uuid="u", version=(2, 0, 0))),
         "nuevo.txt": "y",
     })
-    _instalar(installer, tmp_path / "b.mcpack", {"u": previo})
+    _instalar(installer, tmp_path / "b.mcpack", indice)
 
     assert not (carpeta / "viejo.txt").exists()
     assert (carpeta / "nuevo.txt").exists()
@@ -134,8 +166,8 @@ def test_addon_reparte_sus_packs(installer, instalacion, tmp_path):
         "RP.mcpack": dict(nombre="M RP", uuid="rp", tipo="resources"),
         "BP.mcpack": dict(nombre="M BP", uuid="bp", tipo="data"),
     }))
-    assert (instalacion.resource_packs / "M RP" / "manifest.json").is_file()
-    assert (instalacion.behavior_packs / "M BP" / "manifest.json").is_file()
+    assert (instalacion.resource_packs / "MRP" / "manifest.json").is_file()
+    assert (instalacion.behavior_packs / "MBP" / "manifest.json").is_file()
 
 def test_addon_no_deja_rastro_en_descargas(installer, tmp_path):
     """Los packs internos se materializan en un temporal, no junto al origen."""

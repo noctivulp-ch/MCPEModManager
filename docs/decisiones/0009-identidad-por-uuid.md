@@ -1,7 +1,7 @@
 # 0009 — La identidad de un pack es el uuid de su manifiesto
 
 **Fecha:** 2026-08-30
-**Estado:** Aceptada — reemplaza a [0006](0006-nombre-canonico-para-actualizar.md)
+**Estado:** Corregida por [0020](0020-nombre-identifica-uuid-versiona.md) — el `header.uuid` identifica la **versión**, no el pack: hay autores que lo cambian en cada publicación. La identidad del pack es su `header.name`. — reemplaza a [0006](0006-nombre-canonico-para-actualizar.md)
 
 ## Contexto
 

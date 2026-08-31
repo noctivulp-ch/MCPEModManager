@@ -75,7 +75,7 @@ class PanelDescargas(PanelLista):
 
     def _instalar(self, analisis: Analisis) -> None:
         try:
-            self._installer.instalar(analisis, self._scanner.indice_por_uuid())
+            self._installer.instalar(analisis, self._scanner.indice())
         except (ErrorInstalacion, OSError) as e:
             self._avisar(str(e))
         self._scanner.notificar_cambio()

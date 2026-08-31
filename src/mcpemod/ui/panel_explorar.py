@@ -206,7 +206,7 @@ class PanelExplorar(PanelLista):
                     self._avisar(f"Lo descargado de {publicacion.titulo} "
                                  "no es contenido instalable")
                     return
-                self._installer.instalar(analisis, self._scanner.indice_por_uuid())
+                self._installer.instalar(analisis, self._scanner.indice())
 
                 # Se recuerda de dónde vino para que la pestaña de
                 # actualizaciones no tenga que volver a buscarlo.

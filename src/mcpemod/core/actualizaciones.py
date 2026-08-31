@@ -1,15 +1,18 @@
 """Emparejar lo instalado con lo publicado, y saber qué tiene versión nueva.
 
-El problema de fondo: ningún catálogo indexa por `header.uuid`, que es la única
-identidad fiable de un pack. Así que el emparejamiento va al revés de como uno
-lo pediría:
+Qué pack es lo dice su **nombre**; qué versión, el uuid (ver
+`mcpemod.core.identidad`). Eso ordena todo lo de aquí:
 
-1. Se buscan candidatos por título y autor, que es lo que el catálogo sí indexa.
+1. Se buscan candidatos por título y autor, que es lo que el catálogo indexa.
 2. Se ordenan poniendo delante los del mismo autor que declara el manifiesto
    instalado — es la señal más barata y la que más acierta.
-3. Se **confirma** leyendo el manifiesto remoto de cada candidato por `Range`,
-   hasta que uno tenga el mismo uuid. Solo el positivo cuenta: un candidato que
-   no se pueda leer nunca produce un emparejamiento equivocado.
+3. Se **confirma** leyendo el manifiesto publicado por `Range` y comparando el
+   nombre del pack. Solo el positivo cuenta: un candidato que no se pueda leer
+   nunca produce un emparejamiento.
+
+El uuid no sirve para emparejar, pero sí dice algo una vez emparejado: si el
+publicado tiene el mismo uuid que el instalado, es **exactamente la misma
+versión**, aunque el número de versión diga otra cosa.
 
 Confirmar cuesta peticiones, así que el resultado se guarda: un pack ya
 emparejado no se vuelve a buscar, solo se le mira la versión.
@@ -23,6 +26,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 
 from .fuentes import Descarga, Fuente, Publicacion
+from .identidad import clave_de_pack
 from .mod import Instalado
 from .red import ErrorRed
 from .store import Store
@@ -50,13 +54,31 @@ REINTENTO_FALLIDO = timedelta(days=7)
 class Confianza(Enum):
     """Cuánto se sabe de que la publicación encontrada es el pack instalado."""
 
-    #: El manifiesto publicado tiene el mismo `header.uuid`. No hay duda.
+    #: El manifiesto publicado declara el mismo nombre de pack. Es la identidad
+    #: que usa el juego para reconocer una actualización.
     CONFIRMADO = "confirmado"
-    #: Mismo autor y título casi idéntico, pero el uuid no coincide. Pasa de
-    #: verdad: hay autores que cambian el uuid entre versiones mayores, y
-    #: entonces no queda forma automática de saber que es el mismo pack.
+    #: El nombre no coincide del todo, pero es del mismo autor y se parece mucho.
+    #: Queda a criterio de quien mira.
     PROBABLE = "probable"
     NINGUNO = "ninguno"
+
+
+def _es_el_mismo_pack(manifiesto, pieza: Instalado) -> bool:
+    """Si el manifiesto publicado es el mismo pack que el instalado.
+
+    Hacen falta las dos señales porque los autores no son consistentes, y cada
+    una cubre lo que la otra pierde:
+
+    - Unos mantienen el **nombre** y cambian el uuid en cada versión (uno del
+      equipo de prueba codifica el número de versión dentro del uuid).
+    - Otros mantienen el **uuid** y meten la versión en el nombre, que así cambia
+      en cada publicación.
+
+    Con una sola señal, la mitad de los packs quedaría sin emparejar.
+    """
+    if manifiesto.uuid and manifiesto.uuid == pieza.uuid:
+        return True
+    return bool(pieza.clave) and clave_de_pack(manifiesto.nombre) == pieza.clave
 
 
 class _Presupuesto:
@@ -84,6 +106,8 @@ class Resultado:
     publicacion: Publicacion | None = None
     descarga: Descarga | None = None
     version_remota: str | None = None
+    #: El uuid del manifiesto publicado: identifica la versión, no el pack.
+    uuid_remoto: str | None = None
     confianza: Confianza = Confianza.NINGUNO
 
     @property
@@ -101,14 +125,24 @@ class Resultado:
         return comparar(self.pieza.version, self.version_remota)
 
     @property
-    def hay_actualizacion(self) -> bool:
-        """Solo cuenta como actualización lo confirmado por uuid.
+    def misma_version(self) -> bool:
+        """El publicado es exactamente lo instalado, uuid incluido.
 
-        Una coincidencia probable con versión mayor puede ser otro pack
-        distinto: ofrecerla como actualización sin decirlo sobrescribiría lo
-        instalado con algo que no es.
+        Vale más que comparar números: hay packs republicados con el mismo
+        número de versión y contenido distinto, y al revés.
         """
-        return self.seguro and self.estado == EstadoVersion.NUEVA
+        return bool(self.uuid_remoto) and self.uuid_remoto == self.pieza.uuid
+
+    @property
+    def hay_actualizacion(self) -> bool:
+        """Solo cuenta como actualización lo confirmado por el nombre del pack.
+
+        Una coincidencia probable puede ser otro pack del mismo autor:
+        ofrecerla como actualización sobrescribiría lo instalado con algo que no
+        es. Y si el uuid publicado es el mismo, es la versión que ya está por
+        más que el número diga otra cosa.
+        """
+        return self.seguro and not self.misma_version and self.estado == EstadoVersion.NUEVA
 
 
 class Buscador:
@@ -162,6 +196,7 @@ class Buscador:
                     url=guardado["url_descarga"] or "",
                 ) if guardado["url_descarga"] else None,
                 version_remota=guardado["version_remota"],
+                uuid_remoto=guardado["uuid_remoto"],
                 confianza=Confianza(guardado["confianza"] or "ninguno"),
             ))
         return resultados
@@ -238,7 +273,7 @@ class Buscador:
         self, pieza: Instalado, publicacion: Publicacion,
         lecturas: _Presupuesto | None = None,
     ) -> Resultado | None:
-        """Lee el manifiesto publicado y acepta solo si algún uuid coincide.
+        """Lee el manifiesto publicado y acepta si es el mismo pack.
 
         Se miran todos los manifiestos del archivo porque un `.mcaddon` trae
         varios packs dentro y el instalado puede ser cualquiera de ellos.
@@ -252,11 +287,11 @@ class Buscador:
             return None
 
         for manifiesto in leer_manifiestos(descarga.url):
-            if manifiesto.uuid != pieza.uuid:
+            if not _es_el_mismo_pack(manifiesto, pieza):
                 continue
             return Resultado(
                 pieza=pieza, publicacion=publicacion, descarga=descarga,
-                version_remota=manifiesto.version,
+                version_remota=manifiesto.version, uuid_remoto=manifiesto.uuid,
                 confianza=Confianza.CONFIRMADO,
             )
         return None
@@ -271,6 +306,7 @@ class Buscador:
             url_publicacion=resultado.publicacion.url,
             confianza=resultado.confianza.value,
             version_remota=resultado.version_remota,
+            uuid_remoto=resultado.uuid_remoto,
             url_descarga=resultado.descarga.url if resultado.descarga else None,
             nombre_archivo=resultado.descarga.nombre if resultado.descarga else None,
         )

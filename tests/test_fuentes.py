@@ -121,16 +121,62 @@ def test_curseforge_sin_clave_no_intenta_la_peticion():
     with pytest.raises(ErrorRed, match="clave"):
         CurseForge().buscar("x")
 
-def test_curseforge_manda_la_clave(monkeypatch):
+@pytest.fixture(autouse=True)
+def _sin_juego_cacheado(monkeypatch):
+    """El identificador del juego se pregunta una vez por ejecución."""
+    monkeypatch.setattr("mcpemod.core.fuentes.curseforge._id_juego_cache", None)
+
+
+def _curseforge_falso(monkeypatch, juegos=None, mods=None):
+    """Sirve `/games` y `/mods/search`, y anota lo que se le pide."""
     vistas = []
+    juegos = {"data": juegos if juegos is not None else [
+        {"id": 432, "slug": "minecraft", "name": "Minecraft"},
+        {"id": 78022, "slug": "minecraft-bedrock", "name": "Minecraft Bedrock"},
+    ]}
 
     def falsa(url, cabeceras=None, **kw):
-        vistas.append(cabeceras or {})
-        return Respuesta(200, json.dumps({"data": []}).encode(), {}, url)
+        vistas.append((url, cabeceras or {}))
+        cuerpo = juegos if "/games" in url else {"data": mods or []}
+        return Respuesta(200, json.dumps(cuerpo).encode(), {}, url)
 
     monkeypatch.setattr("mcpemod.core.fuentes.curseforge.pedir", falsa)
+    return vistas
+
+
+def test_curseforge_manda_la_clave(monkeypatch):
+    vistas = _curseforge_falso(monkeypatch)
     CurseForge("mi-clave").buscar("x")
-    assert vistas[0].get("x-api-key") == "mi-clave"
+    assert all(c.get("x-api-key") == "mi-clave" for _, c in vistas)
+
+
+def test_curseforge_pregunta_el_id_del_juego_en_vez_de_fijarlo(monkeypatch):
+    """CurseForge sirve Java y Bedrock: pedir el juego equivocado devolvería
+    mods de Java. El identificador se busca por slug, no se escribe a mano."""
+    vistas = _curseforge_falso(monkeypatch)
+    CurseForge("clave").buscar("x")
+
+    assert "/games" in vistas[0][0]
+    assert "gameId=78022" in vistas[1][0]
+
+
+def test_curseforge_sin_bedrock_en_la_lista_no_adivina(monkeypatch):
+    _curseforge_falso(monkeypatch, juegos=[{"id": 432, "slug": "minecraft"}])
+    with pytest.raises(ErrorRed, match="minecraft-bedrock"):
+        CurseForge("clave").buscar("x")
+
+
+def test_curseforge_descarta_lo_que_no_es_de_bedrock(monkeypatch):
+    """Segunda red por si el catálogo colara contenido de la otra plataforma:
+    un mod de Java se distribuye en `.jar`."""
+    _curseforge_falso(monkeypatch, mods=[
+        {"id": 1, "name": "De Bedrock", "latestFiles": [
+            {"fileName": "pack.mcpack", "downloadUrl": "https://cdn/pack.mcpack"}]},
+        {"id": 2, "name": "De Java", "latestFiles": [
+            {"fileName": "mod.jar", "downloadUrl": "https://cdn/mod.jar"}]},
+    ])
+    resultados = CurseForge("clave").buscar("x")
+    assert [p.titulo for p in resultados] == ["De Bedrock"]
 
 def test_curseforge_clave_rechazada(monkeypatch):
     monkeypatch.setattr("mcpemod.core.fuentes.curseforge.pedir",

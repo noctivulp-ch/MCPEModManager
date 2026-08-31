@@ -111,7 +111,28 @@ class Scanner(QObject):
         resultado.sort(key=lambda p: (p.categoria.value, p.nombre.lower()))
         return resultado
 
+    def indice(self) -> dict[str, Instalado]:
+        """Lo instalado, buscable por uuid **y** por clave de nombre.
+
+        El `header.uuid` es la identidad oficial de un pack: la documentación de
+        Bedrock dice que «identifica este pack de cualquier otro» y que al
+        reimportar, la versión mayor reemplaza a la instalada. Es la señal buena.
+
+        Pero hay autores que lo cambian en cada publicación, y entonces el juego
+        trata cada versión como un pack nuevo y se le acumulan. El gestor puede
+        hacerlo mejor si además reconoce el nombre, así que el índice responde a
+        las dos claves. Ver `docs/decisiones/0020`.
+        """
+        indice: dict[str, Instalado] = {}
+        for pieza in self.leer_instalados():
+            if pieza.clave:
+                indice.setdefault(pieza.clave, pieza)
+            if pieza.uuid:
+                indice[pieza.uuid] = pieza
+        return indice
+
     def indice_por_uuid(self) -> dict[str, Instalado]:
+        """Lo instalado por identidad de versión. Para saber si es *esta* versión."""
         return {p.uuid: p for p in self.leer_instalados() if p.uuid}
 
     def _carpetas_por_categoria(self) -> dict[Categoria, Path]:
@@ -178,6 +199,9 @@ class Scanner(QObject):
             categoria=c.categoria,
             ruta=archivo,
             forma=Forma.EMPAQUETADO,
+            # Sin esto, un pack en esta forma llega a la búsqueda sin autor, y
+            # el autor es lo que permite reconocerlo cuando el uuid cambió.
+            autores=c.manifiesto.autores if c.manifiesto else (),
         )
 
     def _leer_mundo(self, carpeta: Path) -> Instalado | None:

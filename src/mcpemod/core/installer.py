@@ -2,12 +2,14 @@
 
 Dos reglas gobiernan todo lo de aquí:
 
-1. **El destino lo decide el tipo del módulo**, no la extensión ni el nombre. El
-   pack declara qué es (`modules[].type`) y el juego mapea eso a una carpeta.
-2. **La identidad es el uuid del manifiesto.** Antes de instalar se busca ese
-   uuid entre lo que ya hay en disco; si aparece, se reemplaza esa carpeta
-   conservando su nombre, aunque la haya creado el juego y se llame de otra
-   forma. Así nunca queda el mismo pack dos veces.
+1. **Qué carpeta le toca lo decide el tipo del módulo**, no la extensión ni el
+   nombre. El pack declara qué es (`modules[].type`) y el juego mapea eso a una
+   de sus carpetas.
+2. **Qué pack es lo dice su `header.uuid`**, que es la identidad oficial, **y en
+   segundo lugar su nombre**, para los packs cuyo autor cambia el uuid en cada
+   publicación — que los hay, y al juego se le acumulan. Si se encuentra un pack
+   que ya está, se reemplaza su carpeta en vez de crear otra. Ver
+   `mcpemod.core.identidad`.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .contenido import Analisis, Categoria, Componente, analizar
+from .identidad import clave_de_pack
 from .mod import EntradaHistorial, Forma, Instalado, nombre_de_carpeta
 from .rutas import Instalacion
 from .store import Store
@@ -39,8 +42,10 @@ class Installer:
     def instalar(self, analisis: Analisis, instalados: dict[str, Instalado]) -> list[Path]:
         """Instala todo lo que trae `analisis`. Devuelve las rutas creadas.
 
-        `instalados` es el índice por uuid de lo que ya hay en disco — es lo que
-        permite reconocer una actualización de un pack que instaló el juego.
+        `instalados` es el índice **por clave de pack** de lo que ya hay en disco
+        (`Scanner.indice()`) — es lo que permite reconocer que esto es una
+        versión nueva de algo que ya está, aunque lo instalara el juego y aunque
+        el uuid haya cambiado.
         """
         if not analisis.componentes:
             raise ErrorInstalacion(f"{analisis.ruta.name} no contiene nada instalable")
@@ -119,7 +124,12 @@ class Installer:
     def _instalar_componente(
         self, analisis: Analisis, componente: Componente, instalados: dict[str, Instalado]
     ) -> Path:
-        anterior = instalados.get(componente.uuid) if componente.uuid else None
+        # El uuid primero, que es la identidad oficial; el nombre como respaldo
+        # para los packs cuyo autor lo cambia en cada versión.
+        anterior = (
+            (instalados.get(componente.uuid) if componente.uuid else None)
+            or instalados.get(clave_de_pack(componente.nombre))
+        )
         destino = self._destino(componente, anterior)
 
         if destino.exists():
@@ -150,8 +160,8 @@ class Installer:
         return destino
 
     def _destino(self, componente: Componente, anterior: Instalado | None) -> Path:
-        # Reinstalar sobre la carpeta que ya tenía el pack, tenga el nombre que
-        # tenga: el juego lo localiza por uuid, y renombrarla solo dejaría dos.
+        # Sobre la carpeta que ya tenía este pack, se llame como se llame: es lo
+        # que hace del reemplazo una actualización y no un duplicado.
         if anterior is not None and anterior.ruta.is_dir():
             return anterior.ruta
 

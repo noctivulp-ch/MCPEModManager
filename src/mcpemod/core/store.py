@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS emparejamientos (
     url_publicacion TEXT,
     confianza       TEXT,
     version_remota  TEXT,
+    uuid_remoto     TEXT,
     url_descarga    TEXT,
     nombre_archivo  TEXT,
     comprobado_en   TEXT NOT NULL
@@ -167,7 +168,8 @@ class Store:
 
     def guardar_emparejamiento(self, uuid: str, *, encontrado: bool, **datos) -> None:
         columnas = ("fuente", "id_publicacion", "titulo", "autor", "url_publicacion",
-                    "confianza", "version_remota", "url_descarga", "nombre_archivo")
+                    "confianza", "version_remota", "uuid_remoto",
+                    "url_descarga", "nombre_archivo")
         with self._cx() as cx:
             cx.execute(
                 f"""INSERT INTO emparejamientos

@@ -197,7 +197,7 @@ class PanelActualizaciones(PanelLista):
                     self._avisar(f"Lo descargado de {resultado.publicacion.titulo} "
                                  "no es contenido instalable")
                     return
-                self._installer.instalar(analisis, self._scanner.indice_por_uuid())
+                self._installer.instalar(analisis, self._scanner.indice())
         except (ErrorRed, ErrorInstalacion, OSError) as e:
             self._avisar(str(e))
             return

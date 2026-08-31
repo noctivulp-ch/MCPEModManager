@@ -39,23 +39,37 @@ El contenido se extrae **a la raíz** de la carpeta de destino. Si el archivo tr
 una carpeta contenedora dentro, se aplana: el juego busca `manifest.json` en la
 raíz de la carpeta del pack y no lo carga si está un nivel más abajo.
 
-## Identidad y actualizaciones
+## Identidad: qué pack es, y qué versión
 
-La identidad es el `header.uuid` del manifiesto — lo mismo que usa el juego. Al
-instalar:
+La norma de Bedrock: el `header.uuid` identifica el pack y debe ser estable entre
+versiones; lo que sube es `header.version`, y al reimportar *"the new pack will
+replace the old one if the version is higher, and ignored if it's the same or
+lower"*.
 
-1. Se busca ese uuid entre lo que ya hay en disco.
-2. Si aparece, se reemplaza **esa carpeta**, con el nombre que tuviera. Un pack
-   que importó el juego como `HideArmorV` se actualiza dentro de `HideArmorV`.
+En la práctica hay autores que cambian el uuid en cada publicación —uno llega a
+codificar el número de versión dentro del uuid—. Para el juego cada versión suya
+es un pack nuevo y se le acumulan; el gestor los reconoce por el **nombre** y
+reemplaza en vez de duplicar.
+
+Al instalar:
+
+1. Se busca ese **uuid** entre lo que ya hay en disco; si no aparece, el nombre.
+2. Si aparece, se reemplaza **esa carpeta**, con el nombre que tuviera.
 3. Se registra como `actualizar`, con la versión anterior.
 
-Instalar una versión más vieja funciona igual y el botón dice "Revertir";
-reinstalar la misma, "Reinstalar".
+A diferencia del juego, el gestor **sí deja volver a una versión anterior**: el
+juego ignora una reimportación de versión igual o menor.
 
-El nombre de la carpeta para un pack nuevo es el nombre real del pack, limpio de
-códigos de color `§x` y de caracteres que el sistema de archivos no admite:
-`Hide Armor | V1.2` → `Hide Armor V1.2`. Ver
-[ADR 0011](../decisiones/0011-nombre-de-carpeta-legible.md).
+La carpeta de un pack nuevo se nombra **como la nombraría el juego**: sin los
+códigos `§`, sin barras verticales ni espacios, recortada a diez caracteres.
+`§fHide §bArmor§6 | §aV1.2§r` → `HideArmorV`. No es cosmético: con otro nombre, el
+mismo pack acabaría dos veces, una por cada vía de instalación.
+
+La comparación de nombres ignora la versión metida dentro («Hide Armor | V1.2» y
+«… | V1.3.1» son el mismo pack) pero no los sufijos que distinguen hermanos
+(«NG» / «FG», «RP» / «BP»), que son packs distintos y conviven instalados.
+
+Ver [ADR 0020](../decisiones/0020-nombre-identifica-uuid-versiona.md).
 
 ## Formas de instalación
 
@@ -186,21 +200,30 @@ de esperar al watcher. Ver [ADR 0005](../decisiones/0005-qfilesystemwatcher-para
 La pestaña **Actualizaciones** pregunta a los catálogos si hay versión nueva de
 lo que hay instalado.
 
-Ningún catálogo indexa por `header.uuid`, así que el emparejamiento va al revés:
-se buscan candidatos por título, se ponen delante los del mismo autor que declara
-el manifiesto instalado, y se **confirma** leyendo el manifiesto publicado y
-comparando el uuid. Solo el positivo cuenta.
+Los catálogos no indexan ni por uuid ni por nombre de manifiesto, así que el
+emparejamiento va al revés: se buscan candidatos por título, se ponen delante los
+del mismo autor, y se **confirma** leyendo el manifiesto publicado. Solo el
+positivo cuenta.
+
+Confirma si coincide **el nombre del pack o el uuid**. Hacen falta las dos
+señales porque los autores no son consistentes:
+
+| | uuid | nombre | Qué lo empareja |
+|---|---|---|---|
+| Déesse UI | cambia cada versión | estable | el nombre |
+| Hide Armor | estable | lleva la versión dentro | el uuid |
 
 | Confianza | Qué significa | Qué se ofrece |
 |---|---|---|
-| Confirmado | El uuid publicado es el instalado | **Actualizar** |
-| «sin confirmar» | Mismo autor y título, uuid distinto | **Ver**, para decidir |
+| Confirmado | El publicado es este pack | **Actualizar** |
+| «sin confirmar» | Mismo autor y título parecido, pero el manifiesto no lo confirma | **Ver**, para decidir |
 | No aparece | No se encontró | — |
 
 Una coincidencia sin confirmar **no** cuenta como actualización: instalarla
-encima podría sobrescribir con un pack que no es el mismo. Pasa de verdad —hay
-autores que cambian el uuid al publicar una versión mayor— y esa decisión es del
-usuario con la publicación delante.
+encima podría sobrescribir con un pack que no es el mismo.
+
+Si el uuid publicado es el mismo que el instalado, es exactamente esa versión y
+tampoco se ofrece — por más que el número de versión diga otra cosa.
 
 Quedan fuera el contenido de la tienda, lo que no tiene uuid (los mundos) y lo
 que no declara versión.

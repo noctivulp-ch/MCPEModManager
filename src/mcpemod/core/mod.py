@@ -10,10 +10,9 @@ from enum import Enum
 from pathlib import Path
 
 from .contenido import Categoria
+from .identidad import carpeta_del_juego, clave_de_pack
 
-_ILEGALES = re.compile(r'[/\\:*?"<>|\x00-\x1f]')
-_ESPACIOS = re.compile(r"\s+")
-_LARGO_MAX_CARPETA = 64
+_ILEGALES = re.compile(r'[/\\:*?"<>\x00-\x1f]')
 
 
 class Forma(Enum):
@@ -48,11 +47,14 @@ class Forma(Enum):
 class Instalado:
     """Una pieza de contenido presente en la carpeta del juego.
 
-    La identidad es el `uuid` del manifiesto — es lo que usa el propio juego, y
-    lo único estable entre dos versiones del mismo pack o entre lo que instaló
-    el gestor y lo que importó el jugador por su cuenta.
+    **Qué pack es lo dice `nombre`; qué versión, `uuid`.** No al revés: hay
+    autores que cambian el uuid en cada publicación, y el juego actualiza igual
+    porque se guía por el nombre. Ver `mcpemod.core.identidad`.
     """
 
+    #: Identidad de la **versión**. Dos piezas con el mismo uuid son la misma
+    #: versión del mismo pack; con distinto uuid pueden ser dos versiones del
+    #: mismo pack.
     uuid: str
     nombre: str
     version: str | None
@@ -65,6 +67,11 @@ class Instalado:
     autores: tuple[str, ...] = ()
     origen: str | None = None
     instalado_en: datetime | None = None
+
+    @property
+    def clave(self) -> str:
+        """Identidad del pack: su nombre normalizado."""
+        return clave_de_pack(self.nombre)
 
     @property
     def gestionable(self) -> bool:
@@ -90,14 +97,15 @@ class EntradaHistorial:
 
 
 def nombre_de_carpeta(nombre: str, respaldo: str = "pack") -> str:
-    """Un nombre de carpeta legible a partir del nombre del pack.
+    """El nombre de carpeta que el juego le daría a este pack.
 
-    El juego identifica los packs por uuid y nunca por su carpeta, así que el
-    nombre es libre; se elige legible en vez de replicar el recorte a diez
-    caracteres con el que quedan las carpetas importadas desde el juego.
+    **No es cosmético.** El juego deriva la carpeta destino del nombre del pack
+    al importar un `.mcpack`, y si esa carpeta ya existe reemplaza su contenido:
+    es así como reconoce una actualización. Poner otro nombre haría que el mismo
+    pack acabase dos veces, una por cada vía de instalación.
     """
-    limpio = _ESPACIOS.sub(" ", _ILEGALES.sub("", nombre)).strip(" .")
-    return limpio[:_LARGO_MAX_CARPETA].strip() or respaldo
+    limpio = _ILEGALES.sub("", carpeta_del_juego(nombre))
+    return limpio or respaldo
 
 
 def hash_archivo(ruta: Path) -> str:

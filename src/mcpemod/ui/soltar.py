@@ -89,7 +89,7 @@ def procesar(rutas: list[Path], scanner: Scanner, installer: Installer) -> Resul
             continue
 
         try:
-            installer.instalar(analisis, scanner.indice_por_uuid())
+            installer.instalar(analisis, scanner.indice())
             resultado.instalados.append(analisis.nombre)
         except (ErrorInstalacion, OSError) as e:
             resultado.errores.append(f"{ruta.name}: {e}")

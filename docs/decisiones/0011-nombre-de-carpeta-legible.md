@@ -1,7 +1,7 @@
 # 0011 — Las carpetas se nombran legibles, no como las nombra el juego
 
 **Fecha:** 2026-08-30
-**Estado:** Aceptada
+**Estado:** Corregida por [0020](0020-nombre-identifica-uuid-versiona.md) — el nombre de carpeta **no** da igual: es lo que el juego usa para reconocer una actualización al importar. Se replica su regla.
 
 ## Contexto
 
