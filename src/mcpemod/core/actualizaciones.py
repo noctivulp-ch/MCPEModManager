@@ -125,24 +125,18 @@ class Resultado:
         return comparar(self.pieza.version, self.version_remota)
 
     @property
-    def misma_version(self) -> bool:
-        """El publicado es exactamente lo instalado, uuid incluido.
-
-        Vale más que comparar números: hay packs republicados con el mismo
-        número de versión y contenido distinto, y al revés.
-        """
-        return bool(self.uuid_remoto) and self.uuid_remoto == self.pieza.uuid
-
-    @property
     def hay_actualizacion(self) -> bool:
-        """Solo cuenta como actualización lo confirmado por el nombre del pack.
+        """Solo cuenta como actualización lo confirmado, y con versión mayor.
 
-        Una coincidencia probable puede ser otro pack del mismo autor:
-        ofrecerla como actualización sobrescribiría lo instalado con algo que no
-        es. Y si el uuid publicado es el mismo, es la versión que ya está por
-        más que el número diga otra cosa.
+        Una coincidencia probable puede ser otro pack del mismo autor: ofrecerla
+        sobrescribiría lo instalado con algo que no es.
+
+        El uuid **no** entra en esta cuenta. Lo normal es que sea el mismo entre
+        versiones —es lo que dice la norma: identifica el pack, no la versión— así
+        que exigir que cambie dejaba fuera casi todas las actualizaciones reales.
+        Fue un residuo de haber tenido esa idea al revés.
         """
-        return self.seguro and not self.misma_version and self.estado == EstadoVersion.NUEVA
+        return self.seguro and self.estado == EstadoVersion.NUEVA
 
 
 class Buscador:

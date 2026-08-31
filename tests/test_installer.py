@@ -255,3 +255,37 @@ def test_desinstalar_lo_que_ya_no_esta(installer, instalacion):
                       categoria=Categoria.RECURSO,
                       ruta=instalacion.resource_packs / "fantasma")
     installer.desinstalar(pieza)  # no lanza
+
+
+def test_actualizar_desde_un_addon_no_instala_lo_demas(installer, instalacion, tmp_path):
+    """Un pack puede estar publicado dentro de un addon que trae más cosas.
+
+    Pasa de verdad: en el equipo de prueba, «CSO Terrorists» se empareja con el
+    addon de «Actual Guns 2», que lo lleva dentro. Actualizar el uno no puede
+    instalar el otro de propina.
+    """
+    ruta = addon(tmp_path / "Combo.mcaddon", {
+        "Quiero.mcpack": dict(nombre="El que quiero", uuid="u-1", tipo="resources"),
+        "NoQuiero.mcpack": dict(nombre="El otro", uuid="u-2", tipo="resources"),
+    })
+    from mcpemod.core.identidad import clave_de_pack
+
+    installer.instalar(analizar(ruta), {}, solo={clave_de_pack("El que quiero")})
+
+    assert [p.name for p in instalacion.resource_packs.iterdir()] == ["Elquequier"]
+
+
+def test_instalar_un_addon_entero_sigue_trayendolo_todo(installer, instalacion, tmp_path):
+    ruta = addon(tmp_path / "Combo.mcaddon", {
+        "A.mcpack": dict(nombre="Uno", uuid="u-1", tipo="resources"),
+        "B.mcpack": dict(nombre="Dos", uuid="u-2", tipo="data"),
+    })
+    installer.instalar(analizar(ruta), {})
+    assert (instalacion.resource_packs / "Uno").is_dir()
+    assert (instalacion.behavior_packs / "Dos").is_dir()
+
+
+def test_si_lo_descargado_no_trae_ese_pack_se_dice(installer, tmp_path):
+    ruta = pack(tmp_path / "otro.mcpack", nombre="Otra cosa", uuid="u-9")
+    with pytest.raises(ErrorInstalacion, match="no contiene el pack"):
+        installer.instalar(analizar(ruta), {}, solo={"elquequeria"})

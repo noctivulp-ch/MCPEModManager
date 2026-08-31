@@ -146,3 +146,153 @@ def test_lo_que_quedo_de_la_anterior_no_ensucia_la_siguiente(qt_app):
     tarea.parar()
 
     assert [m[0] for m in recibidos] == ["nueva"]
+
+
+# --- actualizar en lote ---
+
+class _InstallerFalso:
+    def __init__(self, falla_en=()):
+        self.instalados = []
+        self._falla_en = set(falla_en)
+
+    def instalar(self, analisis, indice, solo=None):
+        nombre = analisis.ruta.name
+        if any(f in nombre for f in self._falla_en):
+            raise OSError("no se pudo")
+        self.instalados.append((nombre, solo))
+        return [analisis.ruta]
+
+
+def _resultado(nombre, uuid, url="https://cdn/p.mcpack"):
+    from pathlib import Path
+
+    from mcpemod.core.actualizaciones import Confianza, Resultado
+    from mcpemod.core.contenido import Categoria
+    from mcpemod.core.fuentes import Descarga, Publicacion
+    from mcpemod.core.mod import Instalado
+
+    pieza = Instalado(uuid=uuid, nombre=nombre, version="1.0.0",
+                      categoria=Categoria.RECURSO, ruta=Path("/tmp/x"))
+    return Resultado(
+        pieza=pieza,
+        publicacion=Publicacion(fuente="f", id="p", titulo=nombre, autor="a", url="u"),
+        descarga=Descarga(nombre=f"{nombre}.mcpack", url=url),
+        version_remota="2.0.0", uuid_remoto="otro",
+        confianza=Confianza.CONFIRMADO,
+    )
+
+
+@pytest.fixture
+def sin_red(monkeypatch, tmp_path):
+    """Sustituye la descarga por escribir un pack de verdad en el temporal."""
+    import json
+    import zipfile
+
+    from mcpemod.core import contenido
+    from mcpemod.ui import trabajo
+
+    def descargar_falso(url, destino, progreso=None):
+        with zipfile.ZipFile(destino, "w") as zf:
+            zf.writestr("manifest.json", json.dumps({
+                "format_version": 2,
+                "header": {"name": "P", "uuid": "u", "version": [2, 0, 0]},
+                "modules": [{"type": "resources", "uuid": "m", "version": [2, 0, 0]}],
+            }))
+        return 1
+
+    monkeypatch.setattr("mcpemod.core.red.descargar", descargar_falso)
+    assert contenido and trabajo
+
+
+def test_instala_todas_las_actualizaciones(qt_app, sin_red):
+    from mcpemod.ui.trabajo import instalar_publicado
+
+    installer = _InstallerFalso()
+    recibidos = []
+    tarea = Tarea()
+    tarea.lanzar(
+        lambda emitir, cancelado: instalar_publicado(
+            [_resultado("Uno", "u-1"), _resultado("Dos", "u-2")],
+            installer, {}, emitir, cancelado,
+        ),
+        recibidos.append,
+    )
+    assert _correr_hasta(qt_app, lambda: any(m[0] == "fin_instalacion" for m in recibidos))
+    tarea.parar()
+
+    fin = [m for m in recibidos if m[0] == "fin_instalacion"][0]
+    assert fin[1] == 2
+    assert fin[2] == []
+    assert [m[1] for m in recibidos if m[0] == "instalado"] == ["u-1", "u-2"]
+
+
+def test_una_que_falla_no_para_las_demas(qt_app, sin_red):
+    from mcpemod.ui.trabajo import instalar_publicado
+
+    installer = _InstallerFalso(falla_en=["Dos"])
+    recibidos = []
+    tarea = Tarea()
+    tarea.lanzar(
+        lambda emitir, cancelado: instalar_publicado(
+            [_resultado("Uno", "u-1"), _resultado("Dos", "u-2"), _resultado("Tres", "u-3")],
+            installer, {}, emitir, cancelado,
+        ),
+        recibidos.append,
+    )
+    assert _correr_hasta(qt_app, lambda: any(m[0] == "fin_instalacion" for m in recibidos))
+    tarea.parar()
+
+    fin = [m for m in recibidos if m[0] == "fin_instalacion"][0]
+    assert fin[1] == 2
+    assert fin[2] == ["Dos"]
+    # Y el motivo llega, en vez de desaparecer.
+    assert any(m[0] == "fallo" and "no se pudo" in m[2] for m in recibidos)
+
+
+def test_cancelar_a_medias_deja_lo_ya_hecho(qt_app, sin_red):
+    """Se cancela en cuanto entra la primera, no por tiempo: con la descarga
+    simulada, cuarenta se hacen antes de que salte ningún temporizador."""
+    from mcpemod.ui.trabajo import instalar_publicado
+
+    puerta = threading.Event()
+    installer = _InstallerFalso()
+    recibidos = []
+    tarea = Tarea()
+    muchas = [_resultado(f"P{i}", f"u-{i}") for i in range(40)]
+
+    def trabajo(emitir, cancelado):
+        def emitir_y_frenar(*datos):
+            emitir(*datos)
+            if datos[0] == "instalado":
+                cancelado.set()
+                puerta.set()
+        instalar_publicado(muchas, installer, {}, emitir_y_frenar, cancelado)
+
+    tarea.lanzar(trabajo, recibidos.append)
+    assert _correr_hasta(qt_app, lambda: any(m[0] == "fin_instalacion" for m in recibidos))
+    tarea.parar()
+
+    assert puerta.is_set()
+    fin = [m for m in recibidos if m[0] == "fin_instalacion"][0]
+    assert fin[1] < len(muchas)
+
+
+def test_al_actualizar_se_pide_solo_ese_pack(qt_app, sin_red):
+    """Lo publicado puede ser un addon con más cosas dentro."""
+    from mcpemod.ui.trabajo import instalar_publicado
+
+    installer = _InstallerFalso()
+    recibidos = []
+    tarea = Tarea()
+    resultado = _resultado("Uno", "u-1")
+    tarea.lanzar(
+        lambda emitir, cancelado: instalar_publicado(
+            [resultado], installer, {}, emitir, cancelado
+        ),
+        recibidos.append,
+    )
+    assert _correr_hasta(qt_app, lambda: any(m[0] == "fin_instalacion" for m in recibidos))
+    tarea.parar()
+
+    (_, solo), = installer.instalados
+    assert solo == {resultado.pieza.clave}

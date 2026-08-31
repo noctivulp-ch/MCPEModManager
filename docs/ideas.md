@@ -6,10 +6,6 @@ Las tareas ya decididas viven en `ToDo.md`; esto es el paso anterior.
 
 ## Lo que el propio uso pide a gritos
 
-**Actualizar todo.** Hay 21 packs con versión nueva. Actualizarlos de uno en uno
-son 21 clics. Un botón que haga los confirmados de golpe, con su barra y su
-resumen. Barato: la lógica ya está.
-
 **Ver qué cambió antes de actualizar.** MCPEDL publica el `changelog` de cada
 versión en el campo `revisions` y ahora mismo se ignora. Es lo que decide si una
 actualización interesa o puede esperar.

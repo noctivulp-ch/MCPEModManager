@@ -241,8 +241,18 @@ Quedan fuera el contenido de la tienda, lo que no tiene uuid (los mundos) y lo
 que no declara versión.
 
 Actualizar descarga el archivo a un temporal y lo pasa por el mismo camino que
-uno de una carpeta vigilada: el emparejamiento por uuid decide el destino y
-reutiliza la carpeta que ya existía.
+uno de una carpeta vigilada, así que el destino lo decide la misma lógica que en
+una instalación normal y reutiliza la carpeta que ya existía.
+
+Se instala **solo el pack que se actualiza**: lo publicado puede ser un addon con
+más cosas dentro, y actualizar uno no debe traer de propina lo que nadie pidió.
+En el equipo de prueba pasa con «CSO Terrorists», que está publicado dentro del
+addon de «Actual Guns 2».
+
+**Actualizar todo** hace de una vez las confirmadas. Las que no lo están quedan
+fuera: pueden ser otro pack del mismo autor, y eso se decide una por una mirando
+su publicación. Si alguna falla, las demás siguen y al final se dice cuáles no
+salieron.
 
 ### Coste
 

@@ -18,7 +18,7 @@ from mcpemod.ui.ajustes import CLAVE_CURSEFORGE
 from mcpemod.ui.estilo import TEXTO_SECUNDARIO
 from mcpemod.ui.panel_lista import PanelLista
 from mcpemod.ui.tareas import Tarea
-from mcpemod.ui.trabajo import comprobar_todos
+from mcpemod.ui.trabajo import comprobar_todos, instalar_publicado
 from mcpemod.ui.widgets import TarjetaActualizacion
 
 _VACIO = (
@@ -40,6 +40,7 @@ class PanelActualizaciones(PanelLista):
         self._scanner = scanner
         self._installer = installer
         self._resultados: dict[str, Resultado] = {}
+        self._fallos: list[str] = []
         self._tarea = Tarea(self)
 
         self._cabecera(self._barra())
@@ -65,6 +66,11 @@ class PanelActualizaciones(PanelLista):
         self._btn_comprobar = boton_primario("Comprobar")
         conectar(self._btn_comprobar.clicked, self._comprobar)
         fila.addWidget(self._btn_comprobar)
+
+        self._btn_todo = boton("Actualizar todo")
+        self._btn_todo.hide()
+        conectar(self._btn_todo.clicked, self._actualizar_todo)
+        fila.addWidget(self._btn_todo)
 
         self._btn_cancelar = boton("Cancelar")
         self._btn_cancelar.hide()
@@ -127,6 +133,16 @@ class PanelActualizaciones(PanelLista):
             self._al_encontrar(*datos)
         elif clase == "terminado":
             self._al_terminar(*datos)
+        elif clase == "instalando":
+            hechos, total, nombre = datos
+            self._progreso.setValue(hechos)
+            self._lbl_estado.setText(f"Actualizando {hechos + 1} de {total}:  {nombre}")
+        elif clase == "instalado":
+            self._resultados.pop(datos[0], None)
+        elif clase == "fallo":
+            self._fallos.append(f"{datos[0]}: {datos[1]}")
+        elif clase == "fin_instalacion":
+            self._al_terminar_instalacion(*datos)
         elif clase == "error_interno":
             self._al_terminar(0, datos[0])
 
@@ -169,6 +185,50 @@ class PanelActualizaciones(PanelLista):
             self._lbl_estado.setText(self._resumen(len(self._resultados)))
         self._repoblar()
 
+    def _pendientes_de_actualizar(self) -> list[Resultado]:
+        return [r for r in self._resultados.values() if r.hay_actualizacion]
+
+    def _actualizar_todo(self) -> None:
+        """Instala de una vez todas las actualizaciones confirmadas.
+
+        Solo las confirmadas: una coincidencia sin confirmar puede ser otro pack,
+        y eso se decide de una en una mirando su publicación.
+        """
+        pendientes = self._pendientes_de_actualizar()
+        if not pendientes or self._tarea.corriendo:
+            return
+
+        self._fallos = []
+        self._btn_comprobar.hide()
+        self._btn_todo.hide()
+        self._btn_cancelar.show()
+        self._progreso.setRange(0, len(pendientes))
+        self._progreso.setValue(0)
+        self._progreso.show()
+
+        indice = self._scanner.indice()
+        self._tarea.lanzar(
+            lambda emitir, cancelado: instalar_publicado(
+                pendientes, self._installer, indice, emitir, cancelado
+            ),
+            self._al_mensaje,
+        )
+
+    def _al_terminar_instalacion(self, instalados: int, fallidos: list) -> None:
+        self._progreso.hide()
+        self._btn_cancelar.hide()
+        self._btn_comprobar.show()
+
+        partes = [f"{instalados} actualizados"]
+        if fallidos:
+            partes.append(f"{len(fallidos)} fallaron")
+        self._lbl_estado.setText("  ·  ".join(partes))
+
+        if self._fallos:
+            self._avisar("\n".join(self._fallos[:5]))
+        self._scanner.notificar_cambio()
+        self._repoblar()
+
     def _repoblar(self) -> None:
         # Primero lo accionable, y dentro de eso lo confirmado: una lista donde
         # hay que buscar la actualización entre cincuenta «al día» no sirve.
@@ -182,6 +242,10 @@ class PanelActualizaciones(PanelLista):
             conectar(tarjeta.actualizar_pedido, self._actualizar)
             tarjetas.append(tarjeta)
         self._poner(tarjetas)
+
+        cuantas = len(self._pendientes_de_actualizar())
+        self._btn_todo.setText(f"Actualizar las {cuantas}" if cuantas > 1 else "Actualizar")
+        self._btn_todo.setVisible(cuantas > 1 and not self._tarea.corriendo)
 
     # ── Actualizar ────────────────────────────────────────────────────────────
 
@@ -206,7 +270,9 @@ class PanelActualizaciones(PanelLista):
                     self._avisar(f"Lo descargado de {resultado.publicacion.titulo} "
                                  "no es contenido instalable")
                     return
-                self._installer.instalar(analisis, self._scanner.indice())
+                self._installer.instalar(
+                    analisis, self._scanner.indice(), solo={resultado.pieza.clave}
+                )
         except (ErrorRed, ErrorInstalacion, OSError) as e:
             self._avisar(str(e))
             return

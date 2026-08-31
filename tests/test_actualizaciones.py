@@ -161,14 +161,26 @@ def test_confirma_por_uuid_aunque_cambie_el_nombre(store, remoto):
         _instalado(nombre="Hide Armor | V1.2", uuid="u-1", version="1.2.0"))
     assert r.confianza is Confianza.CONFIRMADO
 
-def test_el_mismo_uuid_publicado_no_es_una_actualizacion(store, remoto):
-    """Si el uuid es el mismo, es la versión que ya está — diga lo que diga el
-    número de versión, que algunos autores suben sin cambiar el contenido."""
-    remoto["por_url"]["https://cdn/a.mcpack"] = _manifiesto("u-1", "9.9.9")
+def test_el_mismo_uuid_con_version_mayor_si_es_una_actualizacion(store, remoto):
+    """Lo normal es que el uuid no cambie entre versiones: identifica el pack.
+
+    Exigir que cambiara dejaba fuera casi todas las actualizaciones reales, que
+    es como se coló el bug de «cero resultados» aun teniendo la caché llena.
+    """
+    remoto["por_url"]["https://cdn/a.mcpack"] = _manifiesto("u-1", "2.0.0")
     fuente = FuenteFalsa({"Bonito": [_publicacion()]})
 
     r = Buscador(store, [fuente]).comprobar(_instalado(uuid="u-1", version="1.0.0"))
-    assert r.misma_version
+    assert r.confianza is Confianza.CONFIRMADO
+    assert r.uuid_remoto == "u-1"
+    assert r.hay_actualizacion
+
+def test_la_misma_version_no_es_una_actualizacion(store, remoto):
+    remoto["por_url"]["https://cdn/a.mcpack"] = _manifiesto("u-1", "1.0.0")
+    fuente = FuenteFalsa({"Bonito": [_publicacion()]})
+
+    r = Buscador(store, [fuente]).comprobar(_instalado(uuid="u-1", version="1.0.0"))
+    assert r.estado == EstadoVersion.IGUAL
     assert not r.hay_actualizacion
 
 def test_no_encontrado_si_no_hay_candidatos(store, remoto):

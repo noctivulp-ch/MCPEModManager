@@ -71,3 +71,64 @@ def comprobar_todos(
                  if len(fallos) > 1 else fallos[0])
 
     emitir("terminado", hechos, error)
+
+
+def instalar_publicado(
+    resultados: list,
+    installer,
+    indice_por_pack: dict,
+    emitir: Callable[..., None],
+    cancelado: threading.Event,
+) -> None:
+    """Descarga e instala una lista de actualizaciones confirmadas.
+
+    Cada una se baja a un temporal y se pasa por el mismo camino que un archivo
+    de una carpeta vigilada: así el destino lo decide la misma lógica que en una
+    instalación normal, y no hay un segundo camino que mantener.
+
+    Mensajes: `("instalando", hechos, total, nombre)`, `("instalado", uuid)`,
+    `("fallo", nombre, motivo)` y `("fin_instalacion", instalados, fallidos)`.
+    """
+    import tempfile
+    from pathlib import Path
+
+    from mcpemod.core import ErrorInstalacion, analizar
+    from mcpemod.core.red import descargar
+
+    hechos = instalados = 0
+    fallidos: list[str] = []
+    total = len(resultados)
+
+    for resultado in resultados:
+        if cancelado.is_set():
+            break
+        emitir("instalando", hechos, total, resultado.pieza.nombre)
+        hechos += 1
+
+        descarga = resultado.descarga
+        if descarga is None:
+            fallidos.append(resultado.pieza.nombre)
+            emitir("fallo", resultado.pieza.nombre, "no hay archivo que descargar")
+            continue
+
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                destino = Path(tmp) / (descarga.nombre or "descarga.mcpack")
+                with destino.open("wb") as f:
+                    descargar(descarga.url, f)
+
+                analisis = analizar(destino)
+                if analisis is None:
+                    raise ErrorInstalacion("lo descargado no es contenido instalable")
+                # Solo el pack que se estaba actualizando: lo publicado puede ser
+                # un addon con más cosas dentro, y no se instala lo que nadie pidió.
+                installer.instalar(analisis, indice_por_pack, solo={resultado.pieza.clave})
+        except Exception as e:  # noqa: BLE001 - uno que falle no para los demás
+            fallidos.append(resultado.pieza.nombre)
+            emitir("fallo", resultado.pieza.nombre, str(e))
+            continue
+
+        instalados += 1
+        emitir("instalado", resultado.pieza.uuid)
+
+    emitir("fin_instalacion", instalados, fallidos)

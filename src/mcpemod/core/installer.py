@@ -39,21 +39,36 @@ class Installer:
     def cambiar_instalacion(self, instalacion: Instalacion) -> None:
         self._instalacion = instalacion
 
-    def instalar(self, analisis: Analisis, instalados: dict[str, Instalado]) -> list[Path]:
-        """Instala todo lo que trae `analisis`. Devuelve las rutas creadas.
+    def instalar(
+        self,
+        analisis: Analisis,
+        instalados: dict[str, Instalado],
+        solo: set[str] | None = None,
+    ) -> list[Path]:
+        """Instala lo que trae `analisis`. Devuelve las rutas creadas.
 
-        `instalados` es el índice **por clave de pack** de lo que ya hay en disco
-        (`Scanner.indice()`) — es lo que permite reconocer que esto es una
-        versión nueva de algo que ya está, aunque lo instalara el juego y aunque
-        el uuid haya cambiado.
+        `instalados` es el índice de lo que ya hay en disco (`Scanner.indice()`),
+        que responde por uuid y por clave de nombre — es lo que permite reconocer
+        que esto es una versión nueva de algo que ya está.
+
+        `solo` limita qué piezas se instalan, por clave de pack. Hace falta al
+        actualizar: un pack puede estar publicado **dentro de un addon** que trae
+        además otras cosas, y actualizarlo no debe instalar de propina lo que
+        nadie pidió.
         """
         if not analisis.componentes:
             raise ErrorInstalacion(f"{analisis.ruta.name} no contiene nada instalable")
 
-        creadas = []
-        for componente in analisis.componentes:
-            creadas.append(self._instalar_componente(analisis, componente, instalados))
-        return creadas
+        elegidos = [
+            c for c in analisis.componentes
+            if solo is None or clave_de_pack(c.nombre) in solo
+        ]
+        if not elegidos:
+            raise ErrorInstalacion(
+                f"{analisis.ruta.name} no contiene el pack que se iba a actualizar"
+            )
+
+        return [self._instalar_componente(analisis, c, instalados) for c in elegidos]
 
     def normalizar(self, pieza: Instalado, instalados: dict[str, Instalado]) -> Path:
         """Deja una pieza en la forma que produce el gestor: carpeta con el
