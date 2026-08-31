@@ -1,37 +1,36 @@
-"""Persistencia SQLite: mods instalados e historial de cambios."""
+"""Persistencia SQLite: historial de cambios y archivos ya vistos.
+
+El estado de lo instalado **no** se guarda aquí: la fuente de verdad es el disco,
+porque el jugador instala packs desde el propio juego sin pasar por el gestor.
+La base guarda lo que el disco no sabe — qué pasó y cuándo, y de qué archivo
+salió cada pack.
+"""
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
-from .mod import EntradaHistorial, Mod, TipoArchivo
+from .mod import EntradaHistorial
 
 _ESQUEMA = """
-CREATE TABLE IF NOT EXISTS mods (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    nombre       TEXT NOT NULL,
-    canonico     TEXT NOT NULL,
-    archivo      TEXT NOT NULL UNIQUE,
-    tipo         TEXT NOT NULL,
-    version      TEXT,
-    hash         TEXT NOT NULL,
-    rutas        TEXT NOT NULL,
-    instalado_en TEXT NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_mods_canonico ON mods (canonico);
-
 CREATE TABLE IF NOT EXISTS historial (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
     accion           TEXT NOT NULL,
-    archivo          TEXT NOT NULL,
+    uuid             TEXT NOT NULL DEFAULT '',
+    nombre           TEXT NOT NULL,
+    categoria        TEXT NOT NULL DEFAULT '',
     version          TEXT,
     version_anterior TEXT,
     timestamp        TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS origenes (
+    uuid         TEXT PRIMARY KEY,
+    archivo      TEXT NOT NULL,
+    instalado_en TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS vistos (
@@ -45,7 +44,7 @@ class Store:
         ruta_db.parent.mkdir(parents=True, exist_ok=True)
         self._db = ruta_db
         with self._cx() as cx:
-            _migrar(cx)
+            _descartar_esquema_v1(cx)
             cx.executescript(_ESQUEMA)
 
     @contextmanager
@@ -58,67 +57,40 @@ class Store:
         finally:
             con.close()
 
-    # ── Mods instalados ───────────────────────────────────────────────────────
+    # ── Origen de cada pack ───────────────────────────────────────────────────
 
-    def guardar_mod(self, mod: Mod) -> None:
+    def registrar_origen(self, uuid: str, archivo: str) -> None:
         with self._cx() as cx:
             cx.execute(
-                """INSERT INTO mods (nombre, canonico, archivo, tipo, version, hash, rutas, instalado_en)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                   ON CONFLICT(archivo) DO UPDATE SET
-                       nombre=excluded.nombre,
-                       canonico=excluded.canonico,
-                       version=excluded.version,
-                       hash=excluded.hash,
-                       rutas=excluded.rutas,
-                       instalado_en=excluded.instalado_en""",
-                (
-                    mod.nombre,
-                    mod.canonico,
-                    mod.archivo,
-                    mod.tipo.value,
-                    mod.version,
-                    mod.hash_sha256,
-                    json.dumps([str(r) for r in mod.rutas]),
-                    (mod.instalado_en or datetime.now()).isoformat(),
-                ),
+                """INSERT INTO origenes (uuid, archivo, instalado_en) VALUES (?, ?, ?)
+                   ON CONFLICT(uuid) DO UPDATE SET
+                       archivo=excluded.archivo, instalado_en=excluded.instalado_en""",
+                (uuid, archivo, datetime.now().isoformat()),
             )
 
-    def eliminar_mod(self, archivo: str) -> None:
+    def olvidar_origen(self, uuid: str) -> None:
         with self._cx() as cx:
-            cx.execute("DELETE FROM mods WHERE archivo = ?", (archivo,))
+            cx.execute("DELETE FROM origenes WHERE uuid = ?", (uuid,))
 
-    def mods_instalados(self) -> list[Mod]:
+    def origenes(self) -> dict[str, tuple[str, datetime]]:
         with self._cx() as cx:
-            filas = cx.execute("SELECT * FROM mods ORDER BY nombre COLLATE NOCASE").fetchall()
-        return [_fila_a_mod(f) for f in filas]
-
-    def buscar_por_canonico(self, canonico: str) -> Mod | None:
-        """El mod instalado que es "el mismo" que uno nuevo, ignorando versión."""
-        with self._cx() as cx:
-            fila = cx.execute(
-                "SELECT * FROM mods WHERE canonico = ? ORDER BY instalado_en DESC LIMIT 1",
-                (canonico,),
-            ).fetchone()
-        return _fila_a_mod(fila) if fila else None
-
-    def buscar_por_archivo(self, archivo: str) -> Mod | None:
-        with self._cx() as cx:
-            fila = cx.execute("SELECT * FROM mods WHERE archivo = ?", (archivo,)).fetchone()
-        return _fila_a_mod(fila) if fila else None
+            filas = cx.execute("SELECT * FROM origenes").fetchall()
+        return {
+            f["uuid"]: (f["archivo"], datetime.fromisoformat(f["instalado_en"]))
+            for f in filas
+        }
 
     # ── Historial ─────────────────────────────────────────────────────────────
 
     def registrar(self, entrada: EntradaHistorial) -> None:
         with self._cx() as cx:
             cx.execute(
-                """INSERT INTO historial (accion, archivo, version, version_anterior, timestamp)
-                   VALUES (?, ?, ?, ?, ?)""",
+                """INSERT INTO historial (accion, uuid, nombre, categoria, version,
+                                          version_anterior, timestamp)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    entrada.accion,
-                    entrada.archivo,
-                    entrada.version,
-                    entrada.version_anterior,
+                    entrada.accion, entrada.uuid, entrada.nombre, entrada.categoria,
+                    entrada.version, entrada.version_anterior,
                     entrada.timestamp.isoformat(),
                 ),
             )
@@ -130,10 +102,8 @@ class Store:
             ).fetchall()
         return [
             EntradaHistorial(
-                id=f["id"],
-                accion=f["accion"],
-                archivo=f["archivo"],
-                version=f["version"],
+                id=f["id"], accion=f["accion"], uuid=f["uuid"], nombre=f["nombre"],
+                categoria=f["categoria"], version=f["version"],
                 version_anterior=f["version_anterior"],
                 timestamp=datetime.fromisoformat(f["timestamp"]),
             )
@@ -152,56 +122,25 @@ class Store:
         return fila is None
 
 
-def _fila_a_mod(fila: sqlite3.Row) -> Mod:
-    return Mod(
-        id=fila["id"],
-        nombre=fila["nombre"],
-        canonico=fila["canonico"],
-        archivo=fila["archivo"],
-        tipo=TipoArchivo(fila["tipo"]),
-        version=fila["version"],
-        hash_sha256=fila["hash"],
-        rutas=[Path(r) for r in json.loads(fila["rutas"])],
-        instalado=True,
-        instalado_en=datetime.fromisoformat(fila["instalado_en"]),
-    )
+def _descartar_esquema_v1(cx: sqlite3.Connection) -> None:
+    """La tabla `mods` de la primera versión indexaba por nombre de archivo.
 
-
-def _migrar(cx: sqlite3.Connection) -> None:
-    """Lleva una base del esquema inicial (`ruta` única, sin `canonico`) al actual.
-
-    La base vive en `~/.local/share/` y sobrevive a las reinstalaciones, así que
-    no se puede asumir que empiece vacía.
+    No se migra: registraba packs por el nombre del `.so` o del archivo
+    descargado, y la identidad correcta —el uuid del manifiesto— no está ahí ni
+    se puede deducir. El historial de aquella versión tampoco lo tiene, así que
+    se conserva tal cual y las columnas nuevas quedan vacías para esas filas.
     """
     tabla = cx.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='mods'"
     ).fetchone()
-    if tabla is None:
-        return
+    if tabla is not None:
+        cx.execute("DROP TABLE mods")
 
-    columnas = {f["name"] for f in cx.execute("PRAGMA table_info(mods)").fetchall()}
-    if "canonico" in columnas and "rutas" in columnas:
-        return
-
-    from .version import nombre_canonico
-
-    filas = cx.execute("SELECT * FROM mods").fetchall()
-    cx.execute("ALTER TABLE mods RENAME TO mods_v1")
-    cx.executescript(_ESQUEMA)
-    for f in filas:
-        cx.execute(
-            """INSERT OR IGNORE INTO mods
-               (nombre, canonico, archivo, tipo, version, hash, rutas, instalado_en)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                f["nombre"],
-                nombre_canonico(f["nombre"]),
-                f["archivo"],
-                f["tipo"],
-                f["version"],
-                f["hash"],
-                json.dumps([f["ruta"]]),
-                f["instalado_en"],
-            ),
-        )
-    cx.execute("DROP TABLE mods_v1")
+    columnas = {
+        f["name"]
+        for f in cx.execute("PRAGMA table_info(historial)").fetchall()
+    }
+    if columnas and "nombre" not in columnas:
+        cx.execute("ALTER TABLE historial RENAME COLUMN archivo TO nombre")
+        cx.execute("ALTER TABLE historial ADD COLUMN uuid TEXT NOT NULL DEFAULT ''")
+        cx.execute("ALTER TABLE historial ADD COLUMN categoria TEXT NOT NULL DEFAULT ''")

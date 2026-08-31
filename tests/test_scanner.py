@@ -1,152 +1,151 @@
-"""Pruebas del Scanner — lo que la app cree que hay puesto y descargado.
+"""Pruebas del Scanner — lo que la app cree que hay instalado y descargado.
+
+La fuente de verdad es el disco y no la base, porque el jugador importa packs
+desde el propio juego sin pasar por el gestor. Una lista construida solo desde
+la base no los mostraría.
 
 Necesita un `QCoreApplication` porque `QFileSystemWatcher` es un objeto de Qt,
-pero no toca la UI ni necesita display: el escaneo en sí es lógica pura sobre
-directorios de `tmp_path`.
+pero no toca la UI ni necesita pantalla.
 """
 
-import io
 import json
-import zipfile
 
 import pytest
+from conftest import escribir_zip, manifiesto, mundo, pack
 from PySide6.QtCore import QCoreApplication
 
-from mcpemod.core import scanner as modulo_scanner
-from mcpemod.core.mod import Mod, TipoArchivo
+from mcpemod.core.contenido import Categoria
 from mcpemod.core.scanner import Scanner
-from mcpemod.core.store import Store
 
 
 @pytest.fixture(scope="session")
 def qt_app():
-    app = QCoreApplication.instance() or QCoreApplication([])
-    yield app
+    return QCoreApplication.instance() or QCoreApplication([])
 
 
 @pytest.fixture
-def entorno(tmp_path, monkeypatch, qt_app):
-    mods = tmp_path / "mods"
-    descargas = tmp_path / "Downloads"
-    mods.mkdir()
-    descargas.mkdir()
-
-    monkeypatch.setattr(modulo_scanner, "MODS_DIR", mods)
-    monkeypatch.setattr(modulo_scanner, "DESCARGAS_DIR", descargas)
-    monkeypatch.setattr(modulo_scanner, "DIRECTORIOS_INSTALACION", (mods,))
-
-    store = Store(tmp_path / "test.db")
-    return {"store": store, "scanner": Scanner(store), "mods": mods, "descargas": descargas}
+def scanner(store, instalacion, descargas, qt_app):
+    return Scanner(store, instalacion)
 
 
-def _pack(destino, version=(1, 0, 0)):
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as zf:
-        zf.writestr("manifest.json", json.dumps({"header": {"version": list(version)}}))
-    destino.write_bytes(buf.getvalue())
+def _pack_instalado(carpeta, en_carpeta, **kwargs):
+    destino = carpeta / en_carpeta
+    destino.mkdir(parents=True)
+    (destino / "manifest.json").write_text(json.dumps(manifiesto(**kwargs)))
     return destino
 
 
 # --- instalados ---
 
-def test_detecta_so_puesto_a_mano(entorno):
-    """Un `.so` copiado a `mods/` sin pasar por el gestor sigue siendo un mod puesto."""
-    (entorno["mods"] / "Suelto-v1.0.0.so").write_bytes(b"ELF")
-    instalados = entorno["scanner"].leer_instalados()
-    assert [m.nombre for m in instalados] == ["Suelto-v1.0.0"]
-    assert instalados[0].version == "1.0.0"
+def test_lee_lo_que_instalo_el_juego(scanner, instalacion):
+    """Un pack importado desde el juego está en disco y no en la base."""
+    _pack_instalado(instalacion.resource_packs, "HideArmorV",
+                    nombre="Hide Armor", uuid="u-1", version=(1, 2, 0))
+    piezas = scanner.leer_instalados()
+    assert [p.nombre for p in piezas] == ["Hide Armor"]
+    assert piezas[0].version == "1.2.0"
+    assert piezas[0].ruta.name == "HideArmorV"
 
-def test_ignora_archivos_no_so_en_mods(entorno):
-    (entorno["mods"] / "leeme.txt").write_text("hola")
-    assert entorno["scanner"].leer_instalados() == []
+def test_indice_por_uuid(scanner, instalacion):
+    _pack_instalado(instalacion.resource_packs, "Cualquiera", nombre="X", uuid="el-uuid")
+    assert set(scanner.indice_por_uuid()) == {"el-uuid"}
 
-def test_incluye_packs_registrados(entorno, tmp_path):
-    """Un pack extraído no vive en `mods/`: sin la base no aparecería en la lista."""
-    carpeta = tmp_path / "resource_packs" / "Bonito"
-    carpeta.mkdir(parents=True)
-    entorno["store"].guardar_mod(Mod(
-        nombre="Bonito", canonico="Bonito", archivo="Bonito.mcpack",
-        rutas=[carpeta], tipo=TipoArchivo.MCPACK, version="1.0.0",
-        hash_sha256="h", instalado=True,
-    ))
-    assert [m.nombre for m in entorno["scanner"].leer_instalados()] == ["Bonito"]
+def test_separa_por_categoria(scanner, instalacion):
+    _pack_instalado(instalacion.resource_packs, "RP", nombre="RP", uuid="u-1")
+    _pack_instalado(instalacion.behavior_packs, "BP", nombre="BP", uuid="u-2", tipo="data")
+    categorias = {p.nombre: p.categoria for p in scanner.leer_instalados()}
+    assert categorias == {"RP": Categoria.RECURSO, "BP": Categoria.COMPORTAMIENTO}
 
-def test_purga_lo_borrado_por_fuera(entorno, tmp_path):
-    entorno["store"].guardar_mod(Mod(
-        nombre="Fantasma", canonico="Fantasma", archivo="Fantasma.mcpack",
-        rutas=[tmp_path / "no_existe"], tipo=TipoArchivo.MCPACK, version="1.0.0",
-        hash_sha256="h", instalado=True,
-    ))
-    assert entorno["scanner"].leer_instalados() == []
-    assert entorno["store"].mods_instalados() == []
+def test_ignora_carpetas_sin_manifiesto(scanner, instalacion):
+    (instalacion.resource_packs / "basura").mkdir()
+    assert scanner.leer_instalados() == []
 
-def test_no_duplica_lo_ya_registrado(entorno):
-    ruta = entorno["mods"] / "MyMod-v1.0.0.so"
-    ruta.write_bytes(b"ELF")
-    entorno["store"].guardar_mod(Mod(
-        nombre="MyMod-v1.0.0", canonico="MyMod", archivo="MyMod-v1.0.0.so",
-        rutas=[ruta], tipo=TipoArchivo.SO, version="1.0.0",
-        hash_sha256="h", instalado=True,
-    ))
-    assert len(entorno["scanner"].leer_instalados()) == 1
+def test_mundo_usa_su_levelname(scanner, instalacion):
+    carpeta = instalacion.mundos / "bE2ZIuTv+eY="
+    carpeta.mkdir()
+    (carpeta / "level.dat").write_bytes(b"nivel")
+    (carpeta / "levelname.txt").write_text("DurDream")
+    piezas = scanner.leer_instalados()
+    assert [(p.nombre, p.categoria) for p in piezas] == [("DurDream", Categoria.MUNDO)]
+
+
+# --- lo que el juego no carga ---
+
+def test_mcpack_sin_extraer_sale_inactivo(scanner, instalacion, tmp_path):
+    """Está en la carpeta correcta, pero el juego solo abre carpetas."""
+    origen = pack(tmp_path / "tmp.mcpack", nombre="Bonito", uuid="u")
+    (instalacion.resource_packs / "Bonito.mcpack").write_bytes(origen.read_bytes())
+
+    piezas = scanner.leer_instalados()
+    assert [(p.nombre, p.activo) for p in piezas] == [("Bonito", False)]
+
+def test_pack_anidado_sale_inactivo(scanner, instalacion):
+    """El manifiesto está un nivel por debajo de donde lo busca el juego."""
+    interior = instalacion.resource_packs / "JavaCombat" / "JavaCombat Bn"
+    interior.mkdir(parents=True)
+    (interior / "manifest.json").write_text(json.dumps(manifiesto(nombre="Java", uuid="u")))
+
+    piezas = scanner.leer_instalados()
+    assert [(p.nombre, p.activo) for p in piezas] == [("Java", False)]
+
+def test_pack_normal_sale_activo(scanner, instalacion):
+    _pack_instalado(instalacion.resource_packs, "Bonito", nombre="Bonito", uuid="u")
+    assert scanner.leer_instalados()[0].activo is True
 
 
 # --- descargas ---
 
-def test_lee_descargas_soportadas(entorno):
-    (entorno["descargas"] / "MyMod-v1.0.0.so").write_bytes(b"ELF")
-    _pack(entorno["descargas"] / "Bonito.mcpack")
-    (entorno["descargas"] / "documento.pdf").write_bytes(b"%PDF")
+def test_lee_solo_lo_instalable(scanner, descargas, tmp_path):
+    pack(descargas / "Bonito.mcpack", nombre="Bonito", uuid="u")
+    mundo(descargas / "MiMundo.mcworld")
+    (descargas / "documento.pdf").write_bytes(b"%PDF-1.4")
+    escribir_zip(descargas / "fotos.zip", {"a.png": b"\x89PNG"})
 
-    nombres = [m.archivo for m in entorno["scanner"].leer_descargas()]
-    assert nombres == ["Bonito.mcpack", "MyMod-v1.0.0.so"]
+    nombres = [a.ruta.name for a in scanner.leer_descargas()]
+    assert nombres == ["Bonito.mcpack", "MiMundo.mcworld"]
 
-def test_ignora_descarga_incompleta(entorno):
-    """Un zip a medias existe pero no se puede abrir: mostrarlo solo produce un
-    error al pulsar Instalar."""
-    (entorno["descargas"] / "medio.mcpack").write_bytes(b"PK\x03\x04 truncado")
-    (entorno["descargas"] / "vacio.so").write_bytes(b"")
-    assert entorno["scanner"].leer_descargas() == []
-
-def test_badge_new_la_primera_vez(entorno):
-    (entorno["descargas"] / "MyMod-v1.0.0.so").write_bytes(b"ELF")
-    scanner = entorno["scanner"]
-
-    mods = scanner.leer_descargas()
-    assert mods[0].primera_vez is True
-
-    # Leer de nuevo no apaga el aviso: solo lo apaga mirarlo.
-    assert scanner.leer_descargas()[0].primera_vez is True
-
-    scanner.marcar_vistas(mods)
-    assert scanner.leer_descargas()[0].primera_vez is False
-
-def test_badge_new_reaparece_si_cambia_el_contenido(entorno):
-    """El aviso va por hash, no por nombre: la misma descarga con contenido
-    nuevo es un archivo nuevo aunque se llame igual."""
-    ruta = entorno["descargas"] / "MyMod.so"
-    ruta.write_bytes(b"ELF v1")
-    scanner = entorno["scanner"]
-    scanner.marcar_vistas(scanner.leer_descargas())
-
-    ruta.write_bytes(b"ELF v2")
-    assert scanner.leer_descargas()[0].primera_vez is True
-
-def test_canonico_enlaza_descarga_con_instalado(entorno):
-    (entorno["mods"] / "MyMod-v1.0.0.so").write_bytes(b"ELF")
-    (entorno["descargas"] / "MyMod-v2.0.0.so").write_bytes(b"ELF2")
-    scanner = entorno["scanner"]
-
-    instalado = scanner.leer_instalados()[0]
-    descarga = scanner.leer_descargas()[0]
-    assert instalado.canonico == descarga.canonico == "MyMod"
+def test_carpeta_de_descargas_sin_contenido(scanner, descargas):
+    assert scanner.leer_descargas() == []
 
 
-# --- señales ---
+# --- badge NEW ---
 
-def test_notificar_cambio_emite_ambas(entorno):
+def test_es_nuevo_la_primera_vez(scanner, descargas):
+    ruta = pack(descargas / "Bonito.mcpack", uuid="u")
+    assert scanner.es_nuevo(ruta) is True
+    assert scanner.es_nuevo(ruta) is True  # leerlo no lo apaga
+
+def test_marcar_visto_apaga_el_aviso(scanner, descargas):
+    ruta = pack(descargas / "Bonito.mcpack", uuid="u")
+    scanner.marcar_vistos([ruta])
+    assert scanner.es_nuevo(ruta) is False
+
+def test_el_aviso_va_por_contenido_no_por_nombre(scanner, descargas):
+    """La misma descarga con contenido nuevo es un archivo nuevo."""
+    ruta = pack(descargas / "Bonito.mcpack", uuid="u", version=(1, 0, 0))
+    scanner.marcar_vistos([ruta])
+    pack(descargas / "Bonito.mcpack", uuid="u", version=(2, 0, 0))
+    assert scanner.es_nuevo(ruta) is True
+
+
+# --- señales e instalación activa ---
+
+def test_notificar_cambio_emite_ambas(scanner):
     recibidas = []
-    entorno["scanner"].mods_cambiados.connect(lambda: recibidas.append("mods"))
-    entorno["scanner"].descargas_cambiadas.connect(lambda: recibidas.append("descargas"))
-    entorno["scanner"].notificar_cambio()
-    assert recibidas == ["mods", "descargas"]
+    scanner.instalados_cambiados.connect(lambda: recibidas.append("instalados"))
+    scanner.descargas_cambiadas.connect(lambda: recibidas.append("descargas"))
+    scanner.notificar_cambio()
+    assert recibidas == ["instalados", "descargas"]
+
+def test_cambiar_instalacion(scanner, tmp_path, qt_app):
+    from mcpemod.core.rutas import Instalacion
+
+    otra_raiz = tmp_path / "otro_launcher"
+    otra = Instalacion("otra", otra_raiz, otra_raiz / "games/com.mojang")
+    for c in otra.directorios_contenido:
+        c.mkdir(parents=True)
+    _pack_instalado(otra.resource_packs, "Solo aquí", nombre="Solo aquí", uuid="u")
+
+    assert scanner.leer_instalados() == []
+    scanner.cambiar_instalacion(otra)
+    assert [p.nombre for p in scanner.leer_instalados()] == ["Solo aquí"]

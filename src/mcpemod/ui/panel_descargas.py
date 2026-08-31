@@ -1,13 +1,15 @@
-"""Panel de archivos en la carpeta de descargas."""
+"""Panel de los archivos instalables que hay en la carpeta de descargas."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtWidgets import QWidget
 
-from mcpemod.core import ErrorInstalacion, Installer, Mod, Scanner
+from mcpemod.core import Analisis, ErrorInstalacion, Installer, Scanner
 from mcpemod.senales import conectar
 from mcpemod.ui.panel_lista import PanelLista
-from mcpemod.ui.widgets import TarjetaMod
+from mcpemod.ui.widgets import TarjetaDescarga
 
 
 class PanelDescargas(PanelLista):
@@ -17,40 +19,37 @@ class PanelDescargas(PanelLista):
         installer: Installer,
         parent: QWidget | None = None,
     ) -> None:
-        super().__init__(
-            "Descargas disponibles",
-            "No hay archivos instalables en ~/Downloads.",
-            parent,
-        )
+        super().__init__("No hay contenido de Bedrock en tu carpeta de descargas.", parent)
         self._scanner = scanner
         self._installer = installer
-        self._mods: list[Mod] = []
+        self._rutas: list[Path] = []
         conectar(scanner.descargas_cambiadas, self.recargar)
-        conectar(scanner.mods_cambiados, self.recargar)
+        conectar(scanner.instalados_cambiados, self.recargar)
         self.recargar()
 
     def recargar(self) -> None:
-        self._mods = self._scanner.leer_descargas()
-        instalados = {m.canonico: m for m in self._scanner.leer_instalados()}
+        analisis = self._scanner.leer_descargas()
+        instalados = self._scanner.indice_por_uuid()
+        self._rutas = [a.ruta for a in analisis]
 
         tarjetas = []
-        for mod in self._mods:
-            tarjeta = TarjetaMod(mod, mod_instalado=instalados.get(mod.canonico))
+        for a in analisis:
+            tarjeta = TarjetaDescarga(a, instalados, es_nuevo=self._scanner.es_nuevo(a.ruta))
             conectar(tarjeta.instalar_pedido, self._instalar)
             tarjetas.append(tarjeta)
         self._poner(tarjetas)
 
     def marcar_vistas(self) -> None:
-        """El badge NEW se apaga cuando el usuario mira la pestaña, no antes.
+        """El badge NEW se apaga al mirar la pestaña, no al escanear la carpeta.
 
-        Marcarlos al leer el directorio quemaría el aviso mientras el usuario
-        está en otra pestaña, que es justo cuando más falta hace.
+        Marcarlos al escanear quemaría el aviso mientras el usuario está en otra
+        pestaña, que es justo cuando más falta hace.
         """
-        self._scanner.marcar_vistas(self._mods)
+        self._scanner.marcar_vistos(self._rutas)
 
-    def _instalar(self, mod: Mod) -> None:
+    def _instalar(self, analisis: Analisis) -> None:
         try:
-            self._installer.instalar(mod.origen)
+            self._installer.instalar(analisis, self._scanner.indice_por_uuid())
         except (ErrorInstalacion, OSError) as e:
             self._avisar(str(e))
         self._scanner.notificar_cambio()

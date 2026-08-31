@@ -4,21 +4,19 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QScrollArea, QVBoxLayout, QWidget
 
-from wulf_qt import GAP_CELDA, PADDING_CELDA, PARED, Tallado, mostrar_aviso
+from wulf_qt import PADDING_CELDA, PARED, Tallado, mostrar_aviso
 
 from mcpemod.ui.estilo import SOBRE_BANDEJA
 
 
 class PanelLista(QWidget):
-    def __init__(self, titulo: str, vacio: str, parent: QWidget | None = None) -> None:
+    def __init__(self, vacio: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._texto_vacio = vacio
 
         raiz = QVBoxLayout(self)
-        raiz.setContentsMargins(0, 0, 0, 0)
+        raiz.setContentsMargins(0, PARED, 0, 0)
         raiz.setSpacing(PARED)
-
-        raiz.addWidget(Tallado(titulo, sobre=SOBRE_BANDEJA))
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -27,7 +25,7 @@ class PanelLista(QWidget):
         contenedor = QWidget()
         self._lista = QVBoxLayout(contenedor)
         self._lista.setContentsMargins(0, 0, 0, PADDING_CELDA)
-        self._lista.setSpacing(GAP_CELDA // 2)
+        self._lista.setSpacing(PARED // 2)
         self._lista.addStretch()
 
         scroll.setWidget(contenedor)

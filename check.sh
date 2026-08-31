@@ -24,7 +24,7 @@ end
 
 # 1. Sintaxis — detecta SyntaxError en todos los archivos
 paso "Sintaxis"
-set archivos (find $SRC $PROYECTO/tests -name "*.py" -not -path "*/__pycache__/*")
+set archivos (find $SRC $PROYECTO/tests $PROYECTO/scripts -name "*.py" -not -path "*/__pycache__/*")
 set errores_sintaxis 0
 for f in $archivos
     set salida (python -m py_compile $f 2>&1)
@@ -43,8 +43,9 @@ end
 # 2. Importaciones del core (sin Qt gráfico)
 paso "Importaciones del core"
 set salida (env $ENTORNO python -c "
-import mcpemod.core.mod, mcpemod.core.rutas, mcpemod.core.store
-import mcpemod.core.version, mcpemod.core.installer, mcpemod.core.scanner
+import mcpemod.core.contenido, mcpemod.core.installer, mcpemod.core.manifiesto
+import mcpemod.core.mod, mcpemod.core.rutas, mcpemod.core.scanner
+import mcpemod.core.store, mcpemod.core.version
 " 2>&1)
 if test $status -eq 0
     ok "core importa sin errores"
@@ -56,7 +57,7 @@ end
 # 3. Pyflakes — nombres sin definir, imports sin usar
 paso "Pyflakes"
 if command -q pyflakes
-    set salida (env $ENTORNO pyflakes $SRC $PROYECTO/tests 2>&1)
+    set salida (env $ENTORNO pyflakes $SRC $PROYECTO/tests $PROYECTO/scripts 2>&1)
     if test -z "$salida"
         ok "sin advertencias"
     else

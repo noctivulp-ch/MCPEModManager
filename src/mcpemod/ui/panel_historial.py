@@ -6,21 +6,21 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from wulf_qt import GAP_CELDA, Pozo
 
-from mcpemod.core import Store
-from mcpemod.core.mod import EntradaHistorial
-from mcpemod.ui.estilo import AMBAR, GRIS, ROJO, TEXTO_SECUNDARIO, VERDE
+from mcpemod.core import EntradaHistorial, Store
+from mcpemod.ui.estilo import AMBAR, CIAN, GRIS, ROJO, TEXTO_SECUNDARIO, VERDE
 from mcpemod.ui.panel_lista import PanelLista
 
 _ACCIONES = {
     "instalar": ("↓", VERDE),
     "actualizar": ("↑", AMBAR),
     "desinstalar": ("✕", ROJO),
+    "reparar": ("⟳", CIAN),
 }
 
 
 class PanelHistorial(PanelLista):
     def __init__(self, store: Store, parent: QWidget | None = None) -> None:
-        super().__init__("Historial", "Todavía no hay cambios registrados.", parent)
+        super().__init__("Todavía no hay cambios registrados.", parent)
         self._store = store
         self.recargar()
 
@@ -42,13 +42,15 @@ def _fila(e: EntradaHistorial) -> QWidget:
     info = QVBoxLayout()
     info.setSpacing(2)
 
-    lbl_nombre = QLabel(e.archivo)
+    lbl_nombre = QLabel(e.nombre)
     lbl_nombre.setStyleSheet("font-weight: 600; font-size: 12px;")
     info.addWidget(lbl_nombre)
 
     detalle = e.accion
+    if e.categoria:
+        detalle += f" · {e.categoria}"
     if e.version:
-        detalle += f"  v{e.version}"
+        detalle += f" · v{e.version}"
     if e.version_anterior and e.accion == "actualizar":
         detalle += f"  (antes: v{e.version_anterior})"
     lbl_detalle = QLabel(detalle)

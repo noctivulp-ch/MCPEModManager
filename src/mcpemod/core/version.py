@@ -1,63 +1,28 @@
-"""Detección, normalización y comparación de versiones."""
+"""Comparación de versiones de packs.
+
+Las versiones salen del `header.version` del manifiesto, no del nombre del
+archivo: el nombre lo pone quien renombra la descarga y el manifiesto quien
+empaquetó el pack.
+"""
 
 from __future__ import annotations
 
-import json
-import re
-import zipfile
-from pathlib import Path
+from enum import Enum
 
 from packaging.version import InvalidVersion, Version
 
-from .mod import EstadoVersion
 
-_PATRON_VERSION = re.compile(r"v?(\d+\.\d+(?:\.\d+)*(?:[-_.][A-Za-z]\w*)?)", re.IGNORECASE)
-_COLA_SEPARADORES = re.compile(r"[\s._\-]+$")
-
-
-def detectar_version(ruta: Path) -> str | None:
-    if ruta.suffix.lower() in (".mcpack", ".mcaddon", ".zip"):
-        version = _desde_manifest(ruta)
-        if version:
-            return version
-
-    match = _PATRON_VERSION.search(ruta.stem)
-    return match.group(1) if match else None
-
-
-def nombre_canonico(stem: str) -> str:
-    """El nombre del mod sin su versión — la clave con la que se rastrea.
-
-    `MyMod-v1.2.3` y `MyMod-v1.3.0` son el mismo mod en dos versiones. Sin esto
-    el gestor los trataría como dos mods distintos y "actualizar" instalaría el
-    nuevo dejando el viejo activo al lado.
-    """
-    base = _PATRON_VERSION.sub("", stem)
-    base = _COLA_SEPARADORES.sub("", base).strip()
-    return base or stem
-
-
-def _desde_manifest(ruta: Path) -> str | None:
-    try:
-        with zipfile.ZipFile(ruta) as zf:
-            for nombre in zf.namelist():
-                if nombre.endswith("manifest.json") and nombre.count("/") <= 1:
-                    with zf.open(nombre) as f:
-                        datos = json.load(f)
-                    v = datos.get("header", {}).get("version")
-                    if isinstance(v, list):
-                        return ".".join(str(x) for x in v)
-                    if isinstance(v, str):
-                        return v
-    except (zipfile.BadZipFile, OSError, json.JSONDecodeError, UnicodeDecodeError):
-        pass
-    return None
+class EstadoVersion(Enum):
+    IGUAL = "igual"
+    NUEVA = "nueva"
+    ANTERIOR = "anterior"
+    DESCONOCIDA = "desconocida"
 
 
 def _parsear(version: str) -> Version | None:
     """`Version` tolerando los separadores que usan los empaquetadores de mods.
 
-    `packaging` rechaza `2.0.0_beta`, pero acepta `2.0.0-beta`. El sufijo
+    `packaging` rechaza `2.0.0_beta` pero acepta `2.0.0-beta`. El sufijo
     pre-release es información real de orden y tirarla haría que dos betas
     consecutivas se leyeran como la misma versión.
     """
@@ -69,15 +34,14 @@ def _parsear(version: str) -> Version | None:
     return None
 
 
-def comparar(version_a: str | None, version_b: str | None) -> EstadoVersion:
-    """Qué es `version_b` respecto de `version_a`."""
-    if version_a is None or version_b is None:
+def comparar(instalada: str | None, candidata: str | None) -> EstadoVersion:
+    """Qué es `candidata` respecto de `instalada`."""
+    if instalada is None or candidata is None:
         return EstadoVersion.DESCONOCIDA
 
-    va, vb = _parsear(version_a), _parsear(version_b)
+    va, vb = _parsear(instalada), _parsear(candidata)
     if va is None or vb is None:
-        return EstadoVersion.IGUAL if version_a == version_b else EstadoVersion.DESCONOCIDA
-
+        return EstadoVersion.IGUAL if instalada == candidata else EstadoVersion.DESCONOCIDA
     if va == vb:
         return EstadoVersion.IGUAL
     return EstadoVersion.NUEVA if vb > va else EstadoVersion.ANTERIOR

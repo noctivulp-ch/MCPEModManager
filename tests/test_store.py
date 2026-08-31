@@ -1,124 +1,66 @@
-"""Pruebas de persistencia SQLite (Store).
+"""Pruebas de la base: historial, origen de cada pack y archivos vistos.
 
-`Store` es la única capa que toca la base — si algo falla aquí, toda la app
-trabaja sobre datos incorrectos. Los tests cubren:
-
-1. Que `guardar_mod` con el mismo archivo reemplace al anterior en lugar de
-   duplicarlo — sin esto la lista de instalados mostraría el mismo mod dos veces.
-2. Que `buscar_por_canonico` encuentre un mod aunque su archivo tenga otra
-   versión en el nombre — es lo que convierte "instalar" en "actualizar".
-3. Que las rutas sobrevivan al viaje a la base: un `.mcaddon` deja varias y
-   desinstalar tiene que poder borrarlas todas.
-4. Que `es_nuevo()` sea estable entre sesiones (la base persiste; los tests usan
-   `tmp_path` para aislarse entre sí).
+Lo instalado no se guarda aquí — la fuente de verdad es el disco. La base guarda
+lo que el disco no sabe: qué pasó y cuándo, y de qué archivo salió cada pack.
 """
 
-import sqlite3
-from datetime import datetime, timedelta
-from pathlib import Path
+from datetime import datetime
 
-import pytest
-
-from mcpemod.core.mod import EntradaHistorial, Mod, TipoArchivo
-from mcpemod.core.store import Store
-
-
-@pytest.fixture
-def store(tmp_path) -> Store:
-    return Store(tmp_path / "test.db")
-
-
-def _mod(nombre="TestMod", canonico="TestMod", archivo="testmod.so",
-         version="1.0.0", rutas=None, instalado_en=None) -> Mod:
-    return Mod(
-        nombre=nombre,
-        canonico=canonico,
-        archivo=archivo,
-        rutas=rutas or [Path("/tmp/testmod.so")],
-        tipo=TipoArchivo.SO,
-        version=version,
-        hash_sha256="abc123",
-        instalado=True,
-        instalado_en=instalado_en or datetime.now(),
-    )
-
-
-# --- mods instalados ---
-
-def test_guardar_y_listar(store):
-    store.guardar_mod(_mod())
-    lista = store.mods_instalados()
-    assert len(lista) == 1
-    assert lista[0].nombre == "TestMod"
-
-def test_guardar_sobreescribe_duplicado(store):
-    store.guardar_mod(_mod(version="1.0.0"))
-    store.guardar_mod(_mod(version="2.0.0"))
-    lista = store.mods_instalados()
-    assert len(lista) == 1
-    assert lista[0].version == "2.0.0"
-
-def test_eliminar_mod(store):
-    store.guardar_mod(_mod())
-    store.eliminar_mod("testmod.so")
-    assert store.mods_instalados() == []
-
-def test_rutas_multiples_sobreviven(store):
-    rutas = [Path("/packs/uno"), Path("/behavior/dos")]
-    store.guardar_mod(_mod(archivo="addon.mcaddon", rutas=rutas))
-    assert store.mods_instalados()[0].rutas == rutas
-
-def test_buscar_por_canonico(store):
-    store.guardar_mod(_mod(nombre="MyMod-v1.0.0", canonico="MyMod", archivo="MyMod-v1.0.0.so"))
-    encontrado = store.buscar_por_canonico("MyMod")
-    assert encontrado is not None
-    assert encontrado.nombre == "MyMod-v1.0.0"
-
-def test_buscar_por_canonico_devuelve_el_mas_reciente(store):
-    ayer = datetime.now() - timedelta(days=1)
-    store.guardar_mod(_mod(archivo="viejo.so", version="1.0.0", instalado_en=ayer))
-    store.guardar_mod(_mod(archivo="nuevo.so", version="2.0.0"))
-    assert store.buscar_por_canonico("TestMod").version == "2.0.0"
-
-def test_buscar_por_canonico_no_encontrado(store):
-    assert store.buscar_por_canonico("NoExiste") is None
-
-def test_buscar_por_archivo(store):
-    store.guardar_mod(_mod())
-    assert store.buscar_por_archivo("testmod.so") is not None
-    assert store.buscar_por_archivo("otro.so") is None
+from mcpemod.core.mod import EntradaHistorial
 
 
 # --- historial ---
 
-def test_registrar_historial(store):
-    store.registrar(EntradaHistorial("instalar", "testmod.so", "1.0.0", None))
+def test_registrar_y_leer(store):
+    store.registrar(EntradaHistorial("instalar", "Bonito", "Recursos", "1.0.0", None,
+                                     uuid="u"))
     hist = store.historial()
     assert len(hist) == 1
-    assert hist[0].accion == "instalar"
+    assert (hist[0].accion, hist[0].nombre, hist[0].categoria) == ("instalar", "Bonito", "Recursos")
 
-def test_historial_orden_descendente(store):
+def test_orden_descendente(store):
     for accion in ("instalar", "actualizar", "desinstalar"):
-        store.registrar(EntradaHistorial(accion, "x.so", "1.0", None))
-    hist = store.historial()
-    assert hist[0].accion == "desinstalar"
-    assert hist[-1].accion == "instalar"
-
-def test_historial_desempata_por_id(store):
-    # Tres registros en el mismo milisegundo tienen el mismo timestamp; sin el
-    # desempate por id el orden sería el que le apetezca a SQLite.
-    ts = datetime.now()
-    for accion in ("instalar", "actualizar", "desinstalar"):
-        store.registrar(EntradaHistorial(accion, "x.so", "1.0", None, timestamp=ts))
+        store.registrar(EntradaHistorial(accion, "X", "Recursos", "1.0", None))
     assert [e.accion for e in store.historial()] == ["desinstalar", "actualizar", "instalar"]
 
+def test_desempata_por_id(store):
+    """Tres registros en el mismo instante tienen el mismo timestamp."""
+    ts = datetime.now()
+    for accion in ("instalar", "actualizar", "reparar"):
+        store.registrar(EntradaHistorial(accion, "X", "Recursos", "1.0", None, timestamp=ts))
+    assert [e.accion for e in store.historial()] == ["reparar", "actualizar", "instalar"]
 
-# --- vistos (badge NEW) ---
+def test_limite(store):
+    for n in range(10):
+        store.registrar(EntradaHistorial("instalar", f"P{n}", "Recursos", "1.0", None))
+    assert len(store.historial(limite=3)) == 3
+
+
+# --- origen ---
+
+def test_recordar_de_donde_vino_un_pack(store):
+    store.registrar_origen("u-1", "Hide Armor - [ v1.2 ].mcpack")
+    archivo, cuando = store.origenes()["u-1"]
+    assert archivo == "Hide Armor - [ v1.2 ].mcpack"
+    assert isinstance(cuando, datetime)
+
+def test_reinstalar_actualiza_el_origen(store):
+    store.registrar_origen("u-1", "viejo.mcpack")
+    store.registrar_origen("u-1", "nuevo.mcpack")
+    assert store.origenes()["u-1"][0] == "nuevo.mcpack"
+
+def test_olvidar_origen(store):
+    store.registrar_origen("u-1", "x.mcpack")
+    store.olvidar_origen("u-1")
+    assert store.origenes() == {}
+
+
+# --- vistos ---
 
 def test_es_nuevo_sin_marcar(store):
     assert store.es_nuevo("hash_desconocido") is True
 
-def test_marcar_visto_y_comprobar(store):
+def test_marcar_visto(store):
     store.marcar_visto("hash_abc")
     assert store.es_nuevo("hash_abc") is False
 
@@ -128,33 +70,38 @@ def test_marcar_visto_idempotente(store):
     assert store.es_nuevo("hash_abc") is False
 
 
-# --- migración desde el esquema inicial ---
+# --- esquema anterior ---
 
-def test_migracion_desde_esquema_v1(tmp_path):
-    """Una base creada por la primera versión tiene `ruta` y no `canonico`.
-
-    Vive en `~/.local/share/` y sobrevive a las reinstalaciones, así que abrirla
-    con el esquema nuevo no puede perder lo que ya había registrado.
+def test_base_del_gestor_anterior_se_abre(tmp_path):
+    """La primera versión indexaba por nombre de archivo y guardaba los mods en
+    una tabla `mods`. La identidad correcta —el uuid— no está ahí ni se puede
+    deducir, así que esa tabla se descarta; el historial se conserva.
     """
-    db = tmp_path / "v1.db"
+    import sqlite3
+
+    from mcpemod.core.store import Store
+
+    db = tmp_path / "vieja.db"
     con = sqlite3.connect(db)
     con.executescript("""
-        CREATE TABLE mods (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nombre TEXT NOT NULL, archivo TEXT NOT NULL UNIQUE, tipo TEXT NOT NULL,
-            version TEXT, hash TEXT NOT NULL, ruta TEXT NOT NULL,
-            instalado_en TEXT NOT NULL
-        );
+        CREATE TABLE mods (id INTEGER PRIMARY KEY, nombre TEXT, archivo TEXT UNIQUE,
+                           tipo TEXT, version TEXT, hash TEXT, ruta TEXT,
+                           instalado_en TEXT);
+        CREATE TABLE historial (id INTEGER PRIMARY KEY AUTOINCREMENT, accion TEXT NOT NULL,
+                                archivo TEXT NOT NULL, version TEXT,
+                                version_anterior TEXT, timestamp TEXT NOT NULL);
+        CREATE TABLE vistos (hash TEXT PRIMARY KEY);
     """)
-    con.execute(
-        "INSERT INTO mods (nombre, archivo, tipo, version, hash, ruta, instalado_en) "
-        "VALUES ('MyMod-v1.0.0', 'MyMod-v1.0.0.so', '.so', '1.0.0', 'h', '/mods/x.so', ?)",
-        (datetime.now().isoformat(),),
-    )
+    con.execute("INSERT INTO mods VALUES (1,'M','m.so','.so','1.0','h','/x', ?)",
+                (datetime.now().isoformat(),))
+    con.execute("INSERT INTO historial (accion, archivo, version, version_anterior, timestamp)"
+                " VALUES ('instalar','m.so','1.0',NULL,?)", (datetime.now().isoformat(),))
+    con.execute("INSERT INTO vistos VALUES ('hash_viejo')")
     con.commit()
     con.close()
 
-    mods = Store(db).mods_instalados()
-    assert len(mods) == 1
-    assert mods[0].canonico == "MyMod"
-    assert mods[0].rutas == [Path("/mods/x.so")]
+    store = Store(db)
+    assert store.es_nuevo("hash_viejo") is False
+    hist = store.historial()
+    assert [(e.accion, e.nombre) for e in hist] == [("instalar", "m.so")]
+    assert hist[0].uuid == ""

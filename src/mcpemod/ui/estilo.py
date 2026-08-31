@@ -22,3 +22,13 @@ AMBAR = "#f59e0b"
 ROJO = "#ef4444"
 GRIS = "#94a3b8"
 INDIGO = "#6366f1"
+CIAN = "#06b6d4"
+
+#: Un color por clase de contenido, para distinguirlas de un vistazo.
+COLOR_CATEGORIA = {
+    "recurso": INDIGO,
+    "comportamiento": CIAN,
+    "skin": "#a855f7",
+    "plantilla": "#eab308",
+    "mundo": VERDE,
+}

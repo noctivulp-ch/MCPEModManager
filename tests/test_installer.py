@@ -1,254 +1,224 @@
-"""Pruebas del Installer — la única capa que borra y escribe en el sistema real.
+"""Pruebas del Installer — la capa que escribe y borra en la carpeta del juego.
 
-Todos los fallos que puede tener aquí son destructivos o silenciosos:
-desinstalar algo que no era, dejar dos versiones del mismo mod cargando a la vez,
-o extraer un zip por encima de archivos que no le pertenecen. Los tests
-redirigen los tres directorios de destino a `tmp_path`, así que nunca tocan el
-mcpelauncher real.
+Todos sus fallos son destructivos o silenciosos: borrar lo que no era, dejar el
+mismo pack dos veces, o extraer un zip encima de archivos ajenos. Los tests usan
+una instalación falsa en `tmp_path`, así que nunca tocan el juego real.
 """
 
-import io
 import json
-import zipfile
 
 import pytest
+from conftest import addon, escribir_zip, manifiesto, mundo, pack
 
-from mcpemod.core import installer as modulo_installer
+from mcpemod.core.contenido import Categoria, analizar
 from mcpemod.core.installer import ErrorInstalacion, Installer
-from mcpemod.core.mod import TipoArchivo
-from mcpemod.core.store import Store
+from mcpemod.core.mod import Instalado, nombre_de_carpeta
 
 
 @pytest.fixture
-def entorno(tmp_path, monkeypatch):
-    mods = tmp_path / "mods"
-    resource = tmp_path / "resource_packs"
-    behavior = tmp_path / "behavior_packs"
-    descargas = tmp_path / "Downloads"
-    for d in (mods, resource, behavior, descargas):
-        d.mkdir()
-
-    monkeypatch.setattr(modulo_installer, "MODS_DIR", mods)
-    monkeypatch.setattr(modulo_installer, "RESOURCE_PACKS_DIR", resource)
-    monkeypatch.setattr(modulo_installer, "BEHAVIOR_PACKS_DIR", behavior)
-
-    store = Store(tmp_path / "test.db")
-    return {
-        "store": store, "installer": Installer(store),
-        "mods": mods, "resource": resource, "behavior": behavior,
-        "descargas": descargas,
-    }
+def installer(store, instalacion):
+    return Installer(store, instalacion)
 
 
-def _so(entorno, nombre, contenido=b"ELF"):
-    ruta = entorno["descargas"] / nombre
-    ruta.write_bytes(contenido)
-    return ruta
+def _instalar(installer, ruta, instalados=None):
+    return installer.instalar(analizar(ruta), instalados or {})
 
 
-def _pack(entorno, nombre, tipo="resources", extra=None):
-    manifest = {"header": {"version": [1, 0, 0]}, "modules": [{"type": tipo}]}
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as zf:
-        zf.writestr("manifest.json", json.dumps(manifest))
-        for archivo, datos in (extra or {}).items():
-            zf.writestr(archivo, datos)
-    ruta = entorno["descargas"] / nombre
-    ruta.write_bytes(buf.getvalue())
-    return ruta
+# --- destino según el tipo declarado ---
+
+def test_recursos_van_a_resource_packs(installer, instalacion, tmp_path):
+    _instalar(installer, pack(tmp_path / "x.mcpack", nombre="Bonito", tipo="resources"))
+    assert (instalacion.resource_packs / "Bonito").is_dir()
+
+def test_datos_van_a_behavior_packs(installer, instalacion, tmp_path):
+    _instalar(installer, pack(tmp_path / "x.mcpack", nombre="Mobs", tipo="data"))
+    assert (instalacion.behavior_packs / "Mobs").is_dir()
+
+def test_scripts_van_a_behavior_packs(installer, instalacion, tmp_path):
+    _instalar(installer, pack(tmp_path / "x.mcpack", nombre="Scripts", tipo="script"))
+    assert (instalacion.behavior_packs / "Scripts").is_dir()
+
+def test_mundo_va_a_minecraftworlds(installer, instalacion, tmp_path):
+    _instalar(installer, mundo(tmp_path / "MiMundo.mcworld"))
+    assert (instalacion.mundos / "MiMundo" / "level.dat").is_file()
+
+def test_la_extension_no_decide_el_destino(installer, instalacion, tmp_path):
+    """Un `.zip` con manifiesto de comportamiento va a behavior_packs igual."""
+    _instalar(installer, pack(tmp_path / "cualquiera.zip", nombre="Z", tipo="data"))
+    assert (instalacion.behavior_packs / "Z").is_dir()
+    assert not (instalacion.resource_packs / "Z").exists()
 
 
-# --- .so ---
+# --- contenido instalado ---
 
-def test_instalar_so(entorno):
-    mod = entorno["installer"].instalar(_so(entorno, "MyMod-v1.0.0.so"))
-    assert (entorno["mods"] / "MyMod-v1.0.0.so").is_file()
-    assert mod.version == "1.0.0"
-    assert mod.canonico == "MyMod"
+def test_el_contenido_se_extrae_a_la_raiz_de_la_carpeta(installer, instalacion, tmp_path):
+    """El juego busca `manifest.json` en la raíz de la carpeta del pack."""
+    _instalar(installer, pack(tmp_path / "x.mcpack", nombre="Bonito"))
+    assert (instalacion.resource_packs / "Bonito" / "manifest.json").is_file()
 
-def test_instalar_registra_en_historial(entorno):
-    entorno["installer"].instalar(_so(entorno, "MyMod-v1.0.0.so"))
-    hist = entorno["store"].historial()
-    assert [e.accion for e in hist] == ["instalar"]
+def test_pack_con_carpeta_contenedora_se_aplana(installer, instalacion, tmp_path):
+    """Si se extrajera tal cual, el manifiesto quedaría un nivel más abajo y el
+    juego no cargaría el pack."""
+    _instalar(installer, pack(tmp_path / "x.mcpack", prefijo="Mi Pack/", nombre="Bonito"))
+    assert (instalacion.resource_packs / "Bonito" / "manifest.json").is_file()
 
-def test_tipo_no_soportado(entorno):
-    ruta = entorno["descargas"] / "notas.txt"
-    ruta.write_text("hola")
-    with pytest.raises(ErrorInstalacion):
-        entorno["installer"].instalar(ruta)
+def test_nombre_de_carpeta_legible(installer, instalacion, tmp_path):
+    _instalar(installer, pack(tmp_path / "x.mcpack", nombre="Hide Armor | V1.2"))
+    assert (instalacion.resource_packs / "Hide Armor V1.2").is_dir()
 
-def test_archivo_inexistente(entorno):
-    with pytest.raises(ErrorInstalacion):
-        entorno["installer"].instalar(entorno["descargas"] / "fantasma.so")
+def test_nombre_de_carpeta_sin_caracteres_ilegales():
+    assert nombre_de_carpeta("a/b:c*d?e") == "abcde"
+    assert nombre_de_carpeta("   ") == "pack"
 
 
-# --- actualización ---
+# --- dedupe por uuid ---
 
-def test_actualizar_retira_la_version_anterior(entorno):
-    """El fallo que esto previene: dos `.so` del mismo mod en `mods/` a la vez.
+def test_reinstalar_reutiliza_la_carpeta_existente(installer, instalacion, tmp_path, store):
+    """El caso real: el pack lo importó el juego con otro nombre de carpeta.
 
-    El launcher carga todo lo que hay en la carpeta, así que dejar la versión
-    vieja al lado de la nueva no es "un archivo de más" — es el mod cargado dos
-    veces, que es lo que hace crashear al juego.
+    El juego localiza los packs por uuid, así que crear una carpeta nueva
+    dejaría el mismo pack dos veces en la lista del juego.
     """
-    inst = entorno["installer"]
-    inst.instalar(_so(entorno, "MyMod-v1.0.0.so"))
-    inst.instalar(_so(entorno, "MyMod-v1.1.0.so"))
+    ajena = instalacion.resource_packs / "HideArmorV"
+    ajena.mkdir()
+    (ajena / "manifest.json").write_text(
+        json.dumps(manifiesto(nombre="Hide Armor", uuid="uuid-hide", version=(1, 2, 0)))
+    )
+    previo = Instalado(uuid="uuid-hide", nombre="Hide Armor", version="1.2.0",
+                       categoria=Categoria.RECURSO, ruta=ajena)
 
-    assert not (entorno["mods"] / "MyMod-v1.0.0.so").exists()
-    assert (entorno["mods"] / "MyMod-v1.1.0.so").is_file()
-    assert len(entorno["store"].mods_instalados()) == 1
+    _instalar(installer,
+              pack(tmp_path / "Hide Armor v1.3.mcpack", nombre="Hide Armor",
+                   uuid="uuid-hide", version=(1, 3, 0)),
+              {"uuid-hide": previo})
 
-def test_actualizar_se_registra_como_actualizacion(entorno):
-    inst = entorno["installer"]
-    inst.instalar(_so(entorno, "MyMod-v1.0.0.so"))
-    inst.instalar(_so(entorno, "MyMod-v1.1.0.so"))
-    ultima = entorno["store"].historial()[0]
-    assert ultima.accion == "actualizar"
-    assert ultima.version == "1.1.0"
-    assert ultima.version_anterior == "1.0.0"
+    assert sorted(p.name for p in instalacion.resource_packs.iterdir()) == ["HideArmorV"]
+    assert store.historial()[0].accion == "actualizar"
+    assert store.historial()[0].version_anterior == "1.2.0"
 
-def test_dos_mods_distintos_conviven(entorno):
-    inst = entorno["installer"]
-    inst.instalar(_so(entorno, "MyMod-v1.0.0.so"))
-    inst.instalar(_so(entorno, "OtroMod-v1.0.0.so"))
-    assert len(entorno["store"].mods_instalados()) == 2
+def test_dos_packs_distintos_conviven(installer, instalacion, tmp_path):
+    _instalar(installer, pack(tmp_path / "a.mcpack", nombre="Uno", uuid="u-1"))
+    _instalar(installer, pack(tmp_path / "b.mcpack", nombre="Dos", uuid="u-2"))
+    assert len(list(instalacion.resource_packs.iterdir())) == 2
 
-def test_reinstalar_el_mismo_archivo_no_lo_borra(entorno):
-    """Reinstalar borra la versión anterior; si el origen ES esa versión, se pierde."""
-    inst = entorno["installer"]
-    origen = _so(entorno, "MyMod-v1.0.0.so")
-    inst.instalar(origen)
-    inst.instalar(origen)
-    assert origen.is_file()
-    assert (entorno["mods"] / "MyMod-v1.0.0.so").is_file()
+def test_mismo_nombre_distinto_uuid_no_se_pisan(installer, instalacion, tmp_path):
+    """Dos packs pueden llamarse igual siendo distintos; no pueden compartir carpeta."""
+    _instalar(installer, pack(tmp_path / "a.mcpack", nombre="Pack", uuid="u-1"))
+    _instalar(installer, pack(tmp_path / "b.mcpack", nombre="Pack", uuid="u-2"))
+    assert sorted(p.name for p in instalacion.resource_packs.iterdir()) == ["Pack", "Pack (1)"]
+
+def test_reinstalar_limpia_lo_anterior(installer, instalacion, tmp_path):
+    escribir_zip(tmp_path / "a.mcpack", {
+        "manifest.json": json.dumps(manifiesto(nombre="P", uuid="u")),
+        "viejo.txt": "x",
+    })
+    _instalar(installer, tmp_path / "a.mcpack")
+    carpeta = instalacion.resource_packs / "P"
+    previo = Instalado(uuid="u", nombre="P", version="1.0.0",
+                       categoria=Categoria.RECURSO, ruta=carpeta)
+
+    escribir_zip(tmp_path / "b.mcpack", {
+        "manifest.json": json.dumps(manifiesto(nombre="P", uuid="u", version=(2, 0, 0))),
+        "nuevo.txt": "y",
+    })
+    _instalar(installer, tmp_path / "b.mcpack", {"u": previo})
+
+    assert not (carpeta / "viejo.txt").exists()
+    assert (carpeta / "nuevo.txt").exists()
 
 
-# --- packs ---
+# --- addons ---
 
-def test_instalar_mcpack_resource(entorno):
-    mod = entorno["installer"].instalar(_pack(entorno, "Bonito.mcpack", "resources"))
-    assert (entorno["resource"] / "Bonito").is_dir()
-    assert mod.rutas == [entorno["resource"] / "Bonito"]
+def test_addon_reparte_sus_packs(installer, instalacion, tmp_path):
+    _instalar(installer, addon(tmp_path / "M.mcaddon", {
+        "RP.mcpack": dict(nombre="M RP", uuid="rp", tipo="resources"),
+        "BP.mcpack": dict(nombre="M BP", uuid="bp", tipo="data"),
+    }))
+    assert (instalacion.resource_packs / "M RP" / "manifest.json").is_file()
+    assert (instalacion.behavior_packs / "M BP" / "manifest.json").is_file()
 
-def test_instalar_mcpack_behavior(entorno):
-    entorno["installer"].instalar(_pack(entorno, "Mobs.mcpack", "data"))
-    assert (entorno["behavior"] / "Mobs").is_dir()
+def test_addon_no_deja_rastro_en_descargas(installer, tmp_path):
+    """Los packs internos se materializan en un temporal, no junto al origen."""
+    carpeta = tmp_path / "Descargas"
+    ruta = addon(carpeta / "M.mcaddon", {
+        "RP.mcpack": dict(nombre="M RP", uuid="rp", tipo="resources"),
+        "BP.mcpack": dict(nombre="M BP", uuid="bp", tipo="data"),
+    })
+    _instalar(installer, ruta)
+    assert [p.name for p in carpeta.iterdir()] == ["M.mcaddon"]
 
-def test_reinstalar_pack_limpia_lo_anterior(entorno):
-    inst = entorno["installer"]
-    inst.instalar(_pack(entorno, "Pack.mcpack", "resources", {"viejo.txt": "x"}))
-    assert (entorno["resource"] / "Pack" / "viejo.txt").exists()
 
-    (entorno["descargas"] / "Pack.mcpack").unlink()
-    inst.instalar(_pack(entorno, "Pack.mcpack", "resources", {"nuevo.txt": "y"}))
-    assert not (entorno["resource"] / "Pack" / "viejo.txt").exists()
-    assert (entorno["resource"] / "Pack" / "nuevo.txt").exists()
+# --- seguridad ---
 
-def test_zip_sin_manifest_va_a_mods(entorno):
-    ruta = entorno["descargas"] / "cosas.zip"
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as zf:
-        zf.writestr("leeme.txt", "hola")
-    ruta.write_bytes(buf.getvalue())
-
-    entorno["installer"].instalar(ruta)
-    assert (entorno["mods"] / "cosas.zip").is_file()
-
-def test_zip_incompleto_da_error_legible(entorno):
-    ruta = entorno["descargas"] / "medio.mcpack"
-    ruta.write_bytes(b"PK\x03\x04 truncado")
-    with pytest.raises(ErrorInstalacion, match="incompleto|no es un archivo"):
-        entorno["installer"].instalar(ruta)
-
-def test_zip_slip_rechazado(entorno):
-    """Un zip con `../` fuera de su carpeta escribiría donde no le corresponde."""
-    ruta = entorno["descargas"] / "malicioso.mcpack"
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as zf:
-        zf.writestr("manifest.json", json.dumps({"modules": [{"type": "resources"}]}))
-        zf.writestr("../../fuera.txt", "no deberia estar aqui")
-    ruta.write_bytes(buf.getvalue())
-
+def test_zip_slip_rechazado(installer, instalacion, tmp_path):
+    ruta = escribir_zip(tmp_path / "malicioso.mcpack", {
+        "manifest.json": json.dumps(manifiesto(nombre="Malo", uuid="u")),
+        "../../fuera.txt": "no deberia estar aqui",
+    })
     with pytest.raises(ErrorInstalacion, match="fuera de su carpeta"):
-        entorno["installer"].instalar(ruta)
-    assert not (entorno["resource"].parent.parent / "fuera.txt").exists()
+        _instalar(installer, ruta)
+    assert not (instalacion.com_mojang / "fuera.txt").exists()
+
+def test_archivo_no_instalable(installer, tmp_path):
+    ruta = escribir_zip(tmp_path / "nada.mcpack", {"leeme.txt": "hola"})
+    assert analizar(ruta) is None
 
 
-# --- .mcaddon ---
+# --- reparar ---
 
-def test_instalar_mcaddon_reparte_sus_packs(entorno):
-    addon = entorno["descargas"] / "Mundo.mcaddon"
-    interno = io.BytesIO()
-    with zipfile.ZipFile(interno, "w") as zf:
-        recurso = io.BytesIO()
-        with zipfile.ZipFile(recurso, "w") as rp:
-            rp.writestr("manifest.json", json.dumps({"modules": [{"type": "resources"}]}))
-        comportamiento = io.BytesIO()
-        with zipfile.ZipFile(comportamiento, "w") as bp:
-            bp.writestr("manifest.json", json.dumps({"modules": [{"type": "data"}]}))
-        zf.writestr("MundoRP.mcpack", recurso.getvalue())
-        zf.writestr("MundoBP.mcpack", comportamiento.getvalue())
-    addon.write_bytes(interno.getvalue())
+def test_reparar_pack_sin_extraer(installer, instalacion, tmp_path, store):
+    """Un `.mcpack` copiado a la carpeta sin extraer: el juego solo abre carpetas."""
+    suelto = instalacion.resource_packs / "Bonito.mcpack"
+    pack(tmp_path / "tmp.mcpack", nombre="Bonito", uuid="u")
+    suelto.write_bytes((tmp_path / "tmp.mcpack").read_bytes())
 
-    mod = entorno["installer"].instalar(addon)
-    assert (entorno["resource"] / "MundoRP").is_dir()
-    assert (entorno["behavior"] / "MundoBP").is_dir()
-    assert len(mod.rutas) == 2
-    # El `.mcaddon` de Descargas no es una ruta instalada: borrarlo al
-    # desinstalar destruiría el archivo del usuario.
-    assert addon not in mod.rutas
+    pieza = Instalado(uuid="u", nombre="Bonito", version="1.0.0",
+                      categoria=Categoria.RECURSO, ruta=suelto, activo=False)
+    installer.reparar(pieza, {})
 
-def test_mcaddon_vacio_da_error(entorno):
-    addon = entorno["descargas"] / "Vacio.mcaddon"
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as zf:
-        zf.writestr("leeme.txt", "nada")
-    addon.write_bytes(buf.getvalue())
-    with pytest.raises(ErrorInstalacion, match="no contiene"):
-        entorno["installer"].instalar(addon)
+    assert not suelto.exists()
+    assert (instalacion.resource_packs / "Bonito" / "manifest.json").is_file()
+
+def test_reparar_pack_anidado(installer, instalacion, store):
+    """Un pack extraído con su carpeta dentro deja el manifiesto un nivel abajo."""
+    carpeta = instalacion.resource_packs / "JavaCombat"
+    interior = carpeta / "JavaCombat Bn"
+    interior.mkdir(parents=True)
+    (interior / "manifest.json").write_text(json.dumps(manifiesto(nombre="Java", uuid="u")))
+    (interior / "textura.png").write_bytes(b"\x89PNG")
+
+    pieza = Instalado(uuid="u", nombre="Java", version="1.0.0",
+                      categoria=Categoria.RECURSO, ruta=carpeta, activo=False)
+    installer.reparar(pieza, {})
+
+    assert (carpeta / "manifest.json").is_file()
+    assert (carpeta / "textura.png").is_file()
+    assert not interior.exists()
+    assert store.historial()[0].accion == "reparar"
+
+def test_reparar_lo_que_ya_esta_bien_es_un_error(installer, instalacion):
+    pieza = Instalado(uuid="u", nombre="X", version="1.0.0",
+                      categoria=Categoria.RECURSO,
+                      ruta=instalacion.resource_packs / "X", activo=True)
+    with pytest.raises(ErrorInstalacion, match="ya está instalado"):
+        installer.reparar(pieza, {})
 
 
 # --- desinstalar ---
 
-def test_desinstalar_so(entorno):
-    inst = entorno["installer"]
-    mod = inst.instalar(_so(entorno, "MyMod-v1.0.0.so"))
-    inst.desinstalar(mod)
-    assert not (entorno["mods"] / "MyMod-v1.0.0.so").exists()
-    assert entorno["store"].mods_instalados() == []
-    assert entorno["store"].historial()[0].accion == "desinstalar"
+def test_desinstalar_borra_la_carpeta(installer, instalacion, tmp_path, store):
+    _instalar(installer, pack(tmp_path / "x.mcpack", nombre="Bonito", uuid="u"))
+    carpeta = instalacion.resource_packs / "Bonito"
+    pieza = Instalado(uuid="u", nombre="Bonito", version="1.0.0",
+                      categoria=Categoria.RECURSO, ruta=carpeta)
 
-def test_desinstalar_pack_borra_la_carpeta(entorno):
-    inst = entorno["installer"]
-    mod = inst.instalar(_pack(entorno, "Bonito.mcpack", "resources"))
-    inst.desinstalar(mod)
-    assert not (entorno["resource"] / "Bonito").exists()
+    installer.desinstalar(pieza)
+    assert not carpeta.exists()
+    assert store.historial()[0].accion == "desinstalar"
+    assert store.origenes() == {}
 
-def test_desinstalar_mcaddon_no_toca_descargas(entorno):
-    inst = entorno["installer"]
-    addon = entorno["descargas"] / "Mundo.mcaddon"
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as zf:
-        rp = io.BytesIO()
-        with zipfile.ZipFile(rp, "w") as z:
-            z.writestr("manifest.json", json.dumps({"modules": [{"type": "resources"}]}))
-        zf.writestr("MundoRP.mcpack", rp.getvalue())
-    addon.write_bytes(buf.getvalue())
-
-    mod = inst.instalar(addon)
-    inst.desinstalar(mod)
-    assert not (entorno["resource"] / "MundoRP").exists()
-    assert addon.is_file()
-
-def test_desinstalar_lo_que_ya_no_esta_en_disco(entorno):
-    inst = entorno["installer"]
-    mod = inst.instalar(_so(entorno, "MyMod-v1.0.0.so"))
-    (entorno["mods"] / "MyMod-v1.0.0.so").unlink()
-    inst.desinstalar(mod)
-    assert entorno["store"].mods_instalados() == []
-
-
-def test_tipo_registrado_coincide_con_la_extension(entorno):
-    mod = entorno["installer"].instalar(_pack(entorno, "Bonito.mcpack"))
-    assert mod.tipo == TipoArchivo.MCPACK
+def test_desinstalar_lo_que_ya_no_esta(installer, instalacion):
+    pieza = Instalado(uuid="u", nombre="X", version=None,
+                      categoria=Categoria.RECURSO,
+                      ruta=instalacion.resource_packs / "fantasma")
+    installer.desinstalar(pieza)  # no lanza
