@@ -92,13 +92,20 @@ def main() -> int:
 
         store = Store(raiz / "smoke.db")
         scanner = Scanner(store, instalacion)
+
+        # Dos carpetas vigiladas: la barra dibuja los botones de quitar solo
+        # cuando hay más de una, así que con una sola no se ejercitan.
+        segunda = raiz / "Mods bajados"
+        segunda.mkdir()
+        _pack(segunda / "Otro.mcpack", "Otro pack", "uuid-otro")
+        scanner.agregar_carpeta(segunda)
         installer = Installer(store, instalacion)
 
         # Genera historial de las cuatro acciones, para que el panel las pinte todas.
         installer.instalar(analizar(descargas / "Nuevo.mcpack"), scanner.indice_por_uuid())
         installer.instalar(analizar(descargas / "Bonito v2.mcpack"), scanner.indice_por_uuid())
-        suelto = next(p for p in scanner.leer_instalados() if not p.activo)
-        installer.reparar(suelto, scanner.indice_por_uuid())
+        suelto = next(p for p in scanner.leer_instalados() if p.forma.normalizable)
+        installer.normalizar(suelto, scanner.indice_por_uuid())
         installer.desinstalar(scanner.leer_instalados()[0])
 
         ventana = VentanaPrincipal(store, scanner, installer, [instalacion])

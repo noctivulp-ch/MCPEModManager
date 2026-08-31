@@ -36,6 +36,11 @@ CREATE TABLE IF NOT EXISTS origenes (
 CREATE TABLE IF NOT EXISTS vistos (
     hash TEXT PRIMARY KEY
 );
+
+CREATE TABLE IF NOT EXISTS carpetas (
+    ruta       TEXT PRIMARY KEY,
+    agregada_en TEXT NOT NULL
+);
 """
 
 
@@ -79,6 +84,46 @@ class Store:
             f["uuid"]: (f["archivo"], datetime.fromisoformat(f["instalado_en"]))
             for f in filas
         }
+
+    # ── Carpetas vigiladas ────────────────────────────────────────────────────
+
+    def carpetas(self) -> list[Path]:
+        """Las carpetas donde se buscan descargas, en el orden en que se añadieron."""
+        with self._cx() as cx:
+            filas = cx.execute(
+                "SELECT ruta FROM carpetas ORDER BY agregada_en, ruta"
+            ).fetchall()
+        return [Path(f["ruta"]) for f in filas]
+
+    def agregar_carpeta(self, ruta: Path) -> None:
+        with self._cx() as cx:
+            cx.execute(
+                "INSERT OR IGNORE INTO carpetas (ruta, agregada_en) VALUES (?, ?)",
+                (str(ruta), datetime.now().isoformat()),
+            )
+
+    def quitar_carpeta(self, ruta: Path) -> bool:
+        """Quita una carpeta salvo que sea la última.
+
+        Quedarse sin ninguna dejaría la pestaña de descargas vacía para siempre y
+        sin nada que pulsar para recuperarla.
+        """
+        with self._cx() as cx:
+            total = cx.execute("SELECT COUNT(*) AS n FROM carpetas").fetchone()["n"]
+            if total <= 1:
+                return False
+            cx.execute("DELETE FROM carpetas WHERE ruta = ?", (str(ruta),))
+        return True
+
+    def sembrar_carpetas(self, predeterminada: Path) -> None:
+        """Deja al menos una carpeta vigilada.
+
+        Se llama al arrancar: en la primera ejecución no hay ninguna, y si el
+        usuario quitó todas menos una y esa desapareció del disco, vuelve la
+        predeterminada en vez de dejar la lista muerta.
+        """
+        if not self.carpetas():
+            self.agregar_carpeta(predeterminada)
 
     # ── Historial ─────────────────────────────────────────────────────────────
 

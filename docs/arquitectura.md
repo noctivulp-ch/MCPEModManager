@@ -79,6 +79,7 @@ La base guarda solo lo que el disco no sabe:
 | `historial` | Qué pasó y cuándo |
 | `origenes` | De qué archivo salió cada uuid |
 | `vistos` | Hashes ya mostrados, para el badge NEW |
+| `carpetas` | Dónde buscar contenido descargado |
 
 ## Flujo de datos
 
@@ -120,8 +121,9 @@ Un equipo puede tener varias (la nativa de mcpelauncher y una por flatpak), cada
 una con su `games/com.mojang`. `detectar_instalaciones()` las encuentra y la
 ventana deja elegir. Ver [ADR 0012](decisiones/0012-varias-instalaciones.md).
 
-La carpeta de descargas se resuelve con `xdg-user-dir`: en un escritorio en
-español es `~/Descargas`.
+Las carpetas donde se busca contenido descargado son una lista editable, sembrada
+con `xdg-user-dir DOWNLOAD` (aquí, `~/Descargas`). Se pueden añadir y quitar
+todas menos la última. Ver [ADR 0013](decisiones/0013-carpetas-vigiladas-multiples.md).
 
 ## Pruebas
 

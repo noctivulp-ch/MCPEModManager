@@ -19,7 +19,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .contenido import Analisis, Categoria, Componente, analizar
-from .mod import EntradaHistorial, Instalado, nombre_de_carpeta
+from .mod import EntradaHistorial, Forma, Instalado, nombre_de_carpeta
 from .rutas import Instalacion
 from .store import Store
 
@@ -50,18 +50,20 @@ class Installer:
             creadas.append(self._instalar_componente(analisis, componente, instalados))
         return creadas
 
-    def reparar(self, pieza: Instalado, instalados: dict[str, Instalado]) -> Path:
-        """Deja instalable lo que está en la carpeta pero el juego no carga.
+    def normalizar(self, pieza: Instalado, instalados: dict[str, Instalado]) -> Path:
+        """Deja una pieza en la forma que produce el gestor: carpeta con el
+        `manifest.json` en su raíz.
 
-        Dos formas de acabar así, y las dos se ven en una instalación real: un
-        `.mcpack` copiado a la carpeta sin extraer (el juego solo abre carpetas),
-        y un pack extraído con su carpeta contenedora dentro, que deja el
-        `manifest.json` un nivel por debajo de donde se busca.
+        Las otras dos formas que se encuentran en una instalación real —un
+        `.mcpack` sin extraer y un pack con su carpeta contenedora dentro— son
+        instalaciones válidas que el juego admite. Normalizarlas no las arregla:
+        las uniforma, para que actualizarlas y desinstalarlas funcione igual que
+        con el resto.
         """
-        if pieza.activo:
-            raise ErrorInstalacion(f"{pieza.nombre} ya está instalado correctamente")
+        if not pieza.forma.normalizable:
+            raise ErrorInstalacion(f"{pieza.nombre} ya está en forma de carpeta")
 
-        if pieza.ruta.is_file():
+        if pieza.forma is Forma.EMPAQUETADO:
             analisis = analizar(pieza.ruta)
             if analisis is None:
                 raise ErrorInstalacion(f"{pieza.ruta.name} no es contenido instalable")
@@ -74,7 +76,7 @@ class Installer:
     def _aplanar(self, pieza: Instalado) -> Path:
         hijos = [h for h in pieza.ruta.iterdir() if h.is_dir()]
         if len(hijos) != 1 or not (hijos[0] / "manifest.json").is_file():
-            raise ErrorInstalacion(f"No sé cómo reparar {pieza.nombre}")
+            raise ErrorInstalacion(f"No sé cómo normalizar {pieza.nombre}")
 
         interior = hijos[0]
         with tempfile.TemporaryDirectory(dir=pieza.ruta.parent) as tmp:
@@ -86,7 +88,7 @@ class Installer:
             shutil.move(str(provisional), str(pieza.ruta))
 
         self._store.registrar(EntradaHistorial(
-            accion="reparar",
+            accion="normalizar",
             uuid=pieza.uuid,
             nombre=pieza.nombre,
             categoria=pieza.categoria.etiqueta,

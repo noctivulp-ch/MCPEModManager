@@ -6,6 +6,7 @@ import hashlib
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 
 from .contenido import Categoria
@@ -13,6 +14,34 @@ from .contenido import Categoria
 _ILEGALES = re.compile(r'[/\\:*?"<>|\x00-\x1f]')
 _ESPACIOS = re.compile(r"\s+")
 _LARGO_MAX_CARPETA = 64
+
+
+class Forma(Enum):
+    """Cómo está puesta una pieza en la carpeta del juego.
+
+    No dice si el juego la carga o no: `EMPAQUETADO` y `ANIDADO` son formas que
+    el juego admite, solo que no son las que produce este gestor. Se distinguen
+    para poder normalizarlas, no para desaconsejarlas.
+    """
+
+    #: Carpeta con el `manifest.json` en su raíz. Lo que instala el gestor.
+    CARPETA = "carpeta"
+    #: Un `.mcpack` copiado a la carpeta sin extraer.
+    EMPAQUETADO = "empaquetado"
+    #: Extraído con su carpeta contenedora, con el manifiesto un nivel más abajo.
+    ANIDADO = "anidado"
+
+    @property
+    def etiqueta(self) -> str:
+        return {
+            Forma.CARPETA: "",
+            Forma.EMPAQUETADO: "sin extraer",
+            Forma.ANIDADO: "carpeta anidada",
+        }[self]
+
+    @property
+    def normalizable(self) -> bool:
+        return self is not Forma.CARPETA
 
 
 @dataclass(frozen=True)
@@ -29,9 +58,7 @@ class Instalado:
     version: str | None
     categoria: Categoria
     ruta: Path
-    #: `False` cuando el pack está en la carpeta pero el juego no lo puede leer
-    #: (por ejemplo un `.mcpack` copiado sin extraer).
-    activo: bool = True
+    forma: Forma = Forma.CARPETA
     #: Nombre del archivo del que salió, si lo instaló este gestor.
     origen: str | None = None
     instalado_en: datetime | None = None

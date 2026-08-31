@@ -12,7 +12,7 @@ from conftest import addon, escribir_zip, manifiesto, mundo, pack
 
 from mcpemod.core.contenido import Categoria, analizar
 from mcpemod.core.installer import ErrorInstalacion, Installer
-from mcpemod.core.mod import Instalado, nombre_de_carpeta
+from mcpemod.core.mod import Forma, Instalado, nombre_de_carpeta
 
 
 @pytest.fixture
@@ -166,21 +166,22 @@ def test_archivo_no_instalable(installer, tmp_path):
 
 # --- reparar ---
 
-def test_reparar_pack_sin_extraer(installer, instalacion, tmp_path, store):
-    """Un `.mcpack` copiado a la carpeta sin extraer: el juego solo abre carpetas."""
+def test_normalizar_pack_sin_extraer(installer, instalacion, tmp_path):
+    """Un `.mcpack` sin extraer se instala de verdad y el archivo suelto se va."""
     suelto = instalacion.resource_packs / "Bonito.mcpack"
     pack(tmp_path / "tmp.mcpack", nombre="Bonito", uuid="u")
     suelto.write_bytes((tmp_path / "tmp.mcpack").read_bytes())
 
     pieza = Instalado(uuid="u", nombre="Bonito", version="1.0.0",
-                      categoria=Categoria.RECURSO, ruta=suelto, activo=False)
-    installer.reparar(pieza, {})
+                      categoria=Categoria.RECURSO, ruta=suelto,
+                      forma=Forma.EMPAQUETADO)
+    installer.normalizar(pieza, {})
 
     assert not suelto.exists()
     assert (instalacion.resource_packs / "Bonito" / "manifest.json").is_file()
 
-def test_reparar_pack_anidado(installer, instalacion, store):
-    """Un pack extraído con su carpeta dentro deja el manifiesto un nivel abajo."""
+def test_normalizar_pack_con_carpeta_dentro(installer, instalacion, store):
+    """Sube el contenido un nivel, sin perder nada por el camino."""
     carpeta = instalacion.resource_packs / "JavaCombat"
     interior = carpeta / "JavaCombat Bn"
     interior.mkdir(parents=True)
@@ -188,20 +189,20 @@ def test_reparar_pack_anidado(installer, instalacion, store):
     (interior / "textura.png").write_bytes(b"\x89PNG")
 
     pieza = Instalado(uuid="u", nombre="Java", version="1.0.0",
-                      categoria=Categoria.RECURSO, ruta=carpeta, activo=False)
-    installer.reparar(pieza, {})
+                      categoria=Categoria.RECURSO, ruta=carpeta, forma=Forma.ANIDADO)
+    installer.normalizar(pieza, {})
 
     assert (carpeta / "manifest.json").is_file()
     assert (carpeta / "textura.png").is_file()
     assert not interior.exists()
-    assert store.historial()[0].accion == "reparar"
+    assert store.historial()[0].accion == "normalizar"
 
-def test_reparar_lo_que_ya_esta_bien_es_un_error(installer, instalacion):
+def test_normalizar_una_carpeta_normal_es_un_error(installer, instalacion):
     pieza = Instalado(uuid="u", nombre="X", version="1.0.0",
                       categoria=Categoria.RECURSO,
-                      ruta=instalacion.resource_packs / "X", activo=True)
-    with pytest.raises(ErrorInstalacion, match="ya está instalado"):
-        installer.reparar(pieza, {})
+                      ruta=instalacion.resource_packs / "X", forma=Forma.CARPETA)
+    with pytest.raises(ErrorInstalacion, match="ya está en forma de carpeta"):
+        installer.normalizar(pieza, {})
 
 
 # --- desinstalar ---

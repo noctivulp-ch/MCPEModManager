@@ -14,7 +14,7 @@ from mcpemod.ui.widgets.badge import badge
 
 class TarjetaInstalado(QWidget):
     desinstalar_pedido = Signal(object)
-    reparar_pedido = Signal(object)
+    normalizar_pedido = Signal(object)
 
     def __init__(self, pieza: Instalado, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -49,8 +49,10 @@ class TarjetaInstalado(QWidget):
 
         categoria = self._pieza.categoria
         fila.addWidget(badge(categoria.etiqueta, COLOR_CATEGORIA.get(categoria.value, GRIS)))
-        if not self._pieza.activo:
-            fila.addWidget(badge("⚠ el juego no lo carga", AMBAR))
+        # La forma no es un problema: el juego admite las tres. Se señala porque
+        # solo la de carpeta permite actualizar y desinstalar como el resto.
+        if self._pieza.forma.etiqueta:
+            fila.addWidget(badge(self._pieza.forma.etiqueta, AMBAR))
 
         fila.addStretch()
         return fila
@@ -72,10 +74,14 @@ class TarjetaInstalado(QWidget):
         fila.setSpacing(GAP_CELDA // 2)
         fila.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
-        if not self._pieza.activo:
-            btn_reparar = boton_primario("Reparar")
-            btn_reparar.clicked.connect(lambda: self.reparar_pedido.emit(self._pieza))
-            fila.addWidget(btn_reparar)
+        if self._pieza.forma.normalizable:
+            btn = boton_primario("Extraer")
+            btn.setToolTip(
+                "Deja el pack como una carpeta normal, para poder actualizarlo\n"
+                "y desinstalarlo igual que el resto. El juego admite las dos formas."
+            )
+            btn.clicked.connect(lambda: self.normalizar_pedido.emit(self._pieza))
+            fila.addWidget(btn)
 
         btn = boton("Desinstalar")
         btn.clicked.connect(lambda: self.desinstalar_pedido.emit(self._pieza))

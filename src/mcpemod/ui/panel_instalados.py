@@ -28,7 +28,7 @@ class PanelInstalados(PanelLista):
         for pieza in self._scanner.leer_instalados():
             tarjeta = TarjetaInstalado(pieza)
             conectar(tarjeta.desinstalar_pedido, self._desinstalar)
-            conectar(tarjeta.reparar_pedido, self._reparar)
+            conectar(tarjeta.normalizar_pedido, self._normalizar)
             tarjetas.append(tarjeta)
         self._poner(tarjetas)
 
@@ -39,9 +39,9 @@ class PanelInstalados(PanelLista):
             self._avisar(f"No se pudo desinstalar {pieza.nombre}: {e}")
         self._scanner.notificar_cambio()
 
-    def _reparar(self, pieza: Instalado) -> None:
+    def _normalizar(self, pieza: Instalado) -> None:
         try:
-            self._installer.reparar(pieza, self._scanner.indice_por_uuid())
+            self._installer.normalizar(pieza, self._scanner.indice_por_uuid())
         except (ErrorInstalacion, OSError) as e:
             self._avisar(str(e))
         self._scanner.notificar_cambio()

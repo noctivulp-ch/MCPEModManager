@@ -1,4 +1,4 @@
-"""Estado del disco: qué hay instalado y qué hay descargado.
+"""Estado del disco: qué hay instalado y qué hay en las carpetas vigiladas.
 
 La fuente de verdad de lo instalado es el disco, no la base: el jugador importa
 packs desde el propio juego sin pasar por el gestor, y una lista que no los
@@ -16,7 +16,7 @@ from PySide6.QtCore import QFileSystemWatcher, QObject, Signal
 from ..senales import conectar
 from .contenido import Analisis, Categoria, analizar, categoria_de
 from .manifiesto import ManifiestoInvalido, desde_carpeta
-from .mod import Instalado, hash_archivo
+from .mod import Forma, Instalado, hash_archivo
 from .rutas import Instalacion, carpeta_descargas
 from .store import Store
 
@@ -24,13 +24,20 @@ from .store import Store
 class Scanner(QObject):
     instalados_cambiados = Signal()
     descargas_cambiadas = Signal()
+    carpetas_cambiadas = Signal()
 
     def __init__(self, store: Store, instalacion: Instalacion, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._store = store
         self._instalacion = instalacion
+        # Analizar un archivo abre su zip; con varias carpetas vigiladas eso se
+        # repite en cada refresco. La clave incluye tamaño y mtime para que un
+        # archivo reemplazado se vuelva a leer.
+        self._cache: dict[tuple[str, int, int], Analisis | None] = {}
         self._watcher = QFileSystemWatcher(self)
         conectar(self._watcher.directoryChanged, self._al_cambiar_directorio)
+
+        self._store.sembrar_carpetas(carpeta_descargas())
         self._reobservar()
 
     @property
@@ -42,10 +49,32 @@ class Scanner(QObject):
         self._reobservar()
         self.notificar_cambio()
 
+    # ── Carpetas vigiladas ────────────────────────────────────────────────────
+
+    def carpetas(self) -> list[Path]:
+        return self._store.carpetas()
+
+    def agregar_carpeta(self, ruta: Path) -> None:
+        self._store.agregar_carpeta(ruta.resolve())
+        self._reobservar()
+        self.carpetas_cambiadas.emit()
+        self.descargas_cambiadas.emit()
+
+    def quitar_carpeta(self, ruta: Path) -> bool:
+        """Devuelve `False` si era la última: siempre queda una vigilada."""
+        if not self._store.quitar_carpeta(ruta):
+            return False
+        self._reobservar()
+        self.carpetas_cambiadas.emit()
+        self.descargas_cambiadas.emit()
+        return True
+
+    # ── Observación ───────────────────────────────────────────────────────────
+
     def _reobservar(self) -> None:
         if self._watcher.directories():
             self._watcher.removePaths(self._watcher.directories())
-        for ruta in (*self._instalacion.directorios_contenido, carpeta_descargas()):
+        for ruta in (*self._instalacion.directorios_contenido, *self.carpetas()):
             if ruta.is_dir():
                 self._watcher.addPath(str(ruta))
 
@@ -55,7 +84,7 @@ class Scanner(QObject):
         if Path(ruta).is_dir() and ruta not in self._watcher.directories():
             self._watcher.addPath(ruta)
 
-        if ruta == str(carpeta_descargas()):
+        if Path(ruta) in self.carpetas():
             self.descargas_cambiadas.emit()
         else:
             self.instalados_cambiados.emit()
@@ -65,7 +94,7 @@ class Scanner(QObject):
         self.instalados_cambiados.emit()
         self.descargas_cambiadas.emit()
 
-    # ── Lecturas ──────────────────────────────────────────────────────────────
+    # ── Instalado ─────────────────────────────────────────────────────────────
 
     def leer_instalados(self) -> list[Instalado]:
         origenes = self._store.origenes()
@@ -99,12 +128,11 @@ class Scanner(QObject):
         self, entrada: Path, categoria: Categoria, origenes: dict
     ) -> Instalado | None:
         if entrada.is_file():
-            return self._leer_archivo_suelto(entrada, categoria)
+            return self._leer_empaquetado(entrada, categoria)
         if not entrada.is_dir():
             return None
-
         if categoria == Categoria.MUNDO:
-            return self._leer_mundo(entrada, origenes)
+            return self._leer_mundo(entrada)
 
         carpeta = _carpeta_del_pack(entrada)
         if carpeta is None:
@@ -123,22 +151,21 @@ class Scanner(QObject):
             version=manifiesto.version,
             categoria=categoria_de(manifiesto.tipos) or categoria,
             ruta=entrada,
-            # El juego busca el manifiesto en la raíz de la carpeta del pack: si
-            # está un nivel más abajo, el pack está ahí pero no se carga.
-            activo=carpeta == entrada,
+            forma=Forma.CARPETA if carpeta == entrada else Forma.ANIDADO,
             origen=archivo,
             instalado_en=instalado_en,
         )
 
-    def _leer_archivo_suelto(self, archivo: Path, categoria: Categoria) -> Instalado | None:
+    def _leer_empaquetado(self, archivo: Path, categoria: Categoria) -> Instalado | None:
         """Un `.mcpack` copiado a la carpeta sin extraer.
 
-        Está donde debe pero el juego no lo lee: solo abre carpetas. Se muestra
-        como inactivo para que se vea que hace falta instalarlo de verdad.
+        Es una forma de instalación válida que el juego admite; simplemente no es
+        la que produce este gestor, así que se ofrece extraerlo para dejarlo como
+        el resto.
         """
         if not zipfile.is_zipfile(archivo):
             return None
-        analisis = analizar(archivo)
+        analisis = self._analizar(archivo)
         if analisis is None or not analisis.componentes:
             return None
         c = analisis.componentes[0]
@@ -148,36 +175,54 @@ class Scanner(QObject):
             version=c.version,
             categoria=c.categoria,
             ruta=archivo,
-            activo=False,
+            forma=Forma.EMPAQUETADO,
         )
 
-    def _leer_mundo(self, carpeta: Path, origenes: dict) -> Instalado | None:
+    def _leer_mundo(self, carpeta: Path) -> Instalado | None:
         if not (carpeta / "level.dat").is_file():
             return None
         nombre_txt = carpeta / "levelname.txt"
         nombre = carpeta.name
         if nombre_txt.is_file():
-            leido = nombre_txt.read_text(encoding="utf-8", errors="replace").strip()
-            nombre = leido or nombre
+            nombre = nombre_txt.read_text(encoding="utf-8", errors="replace").strip() or nombre
         return Instalado(
-            uuid="",
-            nombre=nombre,
-            version=None,
-            categoria=Categoria.MUNDO,
-            ruta=carpeta,
+            uuid="", nombre=nombre, version=None,
+            categoria=Categoria.MUNDO, ruta=carpeta,
         )
 
-    def leer_descargas(self) -> list[Analisis]:
-        descargas = carpeta_descargas()
-        if not descargas.is_dir():
-            return []
+    # ── Descargas ─────────────────────────────────────────────────────────────
 
-        resultado = []
-        for archivo in sorted(descargas.iterdir()):
-            analisis = analizar(archivo)
-            if analisis is not None:
-                resultado.append(analisis)
+    def leer_descargas(self) -> list[Analisis]:
+        """Lo instalable que haya en cualquiera de las carpetas vigiladas.
+
+        Un mismo archivo puede aparecer en dos carpetas vigiladas si una está
+        dentro de la otra; se muestra una sola vez.
+        """
+        resultado: list[Analisis] = []
+        vistos: set[Path] = set()
+
+        for carpeta in self.carpetas():
+            if not carpeta.is_dir():
+                continue
+            for archivo in sorted(carpeta.iterdir()):
+                resuelta = archivo.resolve()
+                if resuelta in vistos:
+                    continue
+                analisis = self._analizar(archivo)
+                if analisis is not None:
+                    vistos.add(resuelta)
+                    resultado.append(analisis)
         return resultado
+
+    def _analizar(self, archivo: Path) -> Analisis | None:
+        try:
+            info = archivo.stat()
+        except OSError:
+            return None
+        clave = (str(archivo), info.st_size, int(info.st_mtime))
+        if clave not in self._cache:
+            self._cache[clave] = analizar(archivo)
+        return self._cache[clave]
 
     def es_nuevo(self, ruta: Path) -> bool:
         try:
@@ -194,11 +239,7 @@ class Scanner(QObject):
 
 
 def _carpeta_del_pack(entrada: Path) -> Path | None:
-    """Dónde está el `manifest.json`: en la carpeta, o un nivel más abajo.
-
-    Un pack empaquetado con su propia carpeta contenedora se extrae anidado. El
-    juego no lo carga así, pero está instalado y hay que verlo en la lista.
-    """
+    """Dónde está el `manifest.json`: en la carpeta, o un nivel más abajo."""
     if (entrada / "manifest.json").is_file():
         return entrada
     try:

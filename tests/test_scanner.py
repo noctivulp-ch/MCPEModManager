@@ -15,6 +15,7 @@ from conftest import escribir_zip, manifiesto, mundo, pack
 from PySide6.QtCore import QCoreApplication
 
 from mcpemod.core.contenido import Categoria
+from mcpemod.core.mod import Forma
 from mcpemod.core.scanner import Scanner
 
 
@@ -71,26 +72,28 @@ def test_mundo_usa_su_levelname(scanner, instalacion):
 
 # --- lo que el juego no carga ---
 
-def test_mcpack_sin_extraer_sale_inactivo(scanner, instalacion, tmp_path):
-    """Está en la carpeta correcta, pero el juego solo abre carpetas."""
+def test_mcpack_sin_extraer_se_reconoce(scanner, instalacion, tmp_path):
+    """Un `.mcpack` copiado a la carpeta sin extraer sigue siendo contenido puesto."""
     origen = pack(tmp_path / "tmp.mcpack", nombre="Bonito", uuid="u")
     (instalacion.resource_packs / "Bonito.mcpack").write_bytes(origen.read_bytes())
 
     piezas = scanner.leer_instalados()
-    assert [(p.nombre, p.activo) for p in piezas] == [("Bonito", False)]
+    assert [(p.nombre, p.forma) for p in piezas] == [("Bonito", Forma.EMPAQUETADO)]
 
-def test_pack_anidado_sale_inactivo(scanner, instalacion):
-    """El manifiesto está un nivel por debajo de donde lo busca el juego."""
+def test_pack_con_carpeta_dentro_se_reconoce(scanner, instalacion):
+    """El manifiesto está un nivel por debajo de la carpeta del pack."""
     interior = instalacion.resource_packs / "JavaCombat" / "JavaCombat Bn"
     interior.mkdir(parents=True)
     (interior / "manifest.json").write_text(json.dumps(manifiesto(nombre="Java", uuid="u")))
 
     piezas = scanner.leer_instalados()
-    assert [(p.nombre, p.activo) for p in piezas] == [("Java", False)]
+    assert [(p.nombre, p.forma) for p in piezas] == [("Java", Forma.ANIDADO)]
 
-def test_pack_normal_sale_activo(scanner, instalacion):
+def test_pack_normal_es_forma_carpeta(scanner, instalacion):
     _pack_instalado(instalacion.resource_packs, "Bonito", nombre="Bonito", uuid="u")
-    assert scanner.leer_instalados()[0].activo is True
+    pieza = scanner.leer_instalados()[0]
+    assert pieza.forma is Forma.CARPETA
+    assert pieza.forma.normalizable is False
 
 
 # --- descargas ---
@@ -149,3 +152,87 @@ def test_cambiar_instalacion(scanner, tmp_path, qt_app):
     assert scanner.leer_instalados() == []
     scanner.cambiar_instalacion(otra)
     assert [p.nombre for p in scanner.leer_instalados()] == ["Solo aquí"]
+
+
+# --- carpetas vigiladas ---
+
+def test_arranca_vigilando_la_carpeta_de_descargas(scanner, descargas):
+    assert scanner.carpetas() == [descargas]
+
+def test_agregar_una_segunda_carpeta(scanner, descargas, tmp_path):
+    otra = tmp_path / "Mods bajados"
+    otra.mkdir()
+    scanner.agregar_carpeta(otra)
+    assert set(scanner.carpetas()) == {descargas, otra}
+
+def test_lee_de_todas_las_carpetas(scanner, descargas, tmp_path):
+    otra = tmp_path / "Mods bajados"
+    otra.mkdir()
+    scanner.agregar_carpeta(otra)
+
+    pack(descargas / "Uno.mcpack", nombre="Uno", uuid="u-1")
+    pack(otra / "Dos.mcpack", nombre="Dos", uuid="u-2")
+
+    assert {a.ruta.name for a in scanner.leer_descargas()} == {"Uno.mcpack", "Dos.mcpack"}
+
+def test_quitar_la_carpeta_predeterminada(scanner, descargas, tmp_path):
+    """La inicial no es especial: se puede quitar como cualquier otra."""
+    otra = tmp_path / "Mods bajados"
+    otra.mkdir()
+    scanner.agregar_carpeta(otra)
+
+    assert scanner.quitar_carpeta(descargas) is True
+    assert scanner.carpetas() == [otra]
+
+def test_no_se_puede_quitar_la_ultima(scanner, descargas):
+    """Sin ninguna carpeta la pestaña quedaría vacía y sin nada que pulsar."""
+    assert scanner.quitar_carpeta(descargas) is False
+    assert scanner.carpetas() == [descargas]
+
+def test_carpeta_que_desaparece_no_rompe_la_lectura(scanner, descargas, tmp_path):
+    otra = tmp_path / "temporal"
+    otra.mkdir()
+    scanner.agregar_carpeta(otra)
+    pack(descargas / "Uno.mcpack", nombre="Uno", uuid="u-1")
+
+    otra.rmdir()
+    assert [a.ruta.name for a in scanner.leer_descargas()] == ["Uno.mcpack"]
+
+def test_un_archivo_en_dos_carpetas_anidadas_sale_una_vez(scanner, descargas):
+    """Vigilar una carpeta y su subcarpeta no debe duplicar lo que hay dentro."""
+    dentro = descargas / "packs"
+    dentro.mkdir()
+    scanner.agregar_carpeta(dentro)
+    pack(dentro / "Uno.mcpack", nombre="Uno", uuid="u-1")
+
+    assert len(scanner.leer_descargas()) == 1
+
+def test_las_carpetas_sobreviven_al_reinicio(store, instalacion, descargas, tmp_path, qt_app):
+    from mcpemod.core.scanner import Scanner as S
+
+    otra = tmp_path / "Mods bajados"
+    otra.mkdir()
+    S(store, instalacion).agregar_carpeta(otra)
+
+    assert set(S(store, instalacion).carpetas()) == {descargas, otra}
+
+def test_el_analisis_se_cachea_por_contenido(scanner, descargas, monkeypatch):
+    """Con varias carpetas, cada refresco reabriría todos los zips."""
+    from mcpemod.core import scanner as modulo
+
+    ruta = pack(descargas / "Uno.mcpack", nombre="Uno", uuid="u-1")
+    llamadas = []
+    original = modulo.analizar
+    monkeypatch.setattr(modulo, "analizar",
+                        lambda p: (llamadas.append(p), original(p))[1])
+
+    scanner.leer_descargas()
+    scanner.leer_descargas()
+    assert len(llamadas) == 1
+
+    # Reemplazar el archivo lo vuelve a leer: la clave lleva tamaño y mtime.
+    import os
+    pack(ruta, nombre="Uno", uuid="u-1", version=(2, 0, 0))
+    os.utime(ruta, (0, 0))
+    scanner.leer_descargas()
+    assert len(llamadas) == 2

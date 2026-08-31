@@ -14,7 +14,7 @@ class PanelLista(QWidget):
         super().__init__(parent)
         self._texto_vacio = vacio
 
-        raiz = QVBoxLayout(self)
+        self._raiz = raiz = QVBoxLayout(self)
         raiz.setContentsMargins(0, PARED, 0, 0)
         raiz.setSpacing(PARED)
 
@@ -30,6 +30,10 @@ class PanelLista(QWidget):
 
         scroll.setWidget(contenedor)
         raiz.addWidget(scroll)
+
+    def _cabecera(self, widget: QWidget) -> None:
+        """Fija un widget encima de la lista, fuera del área con scroll."""
+        self._raiz.insertWidget(0, widget)
 
     def _poner(self, widgets: list[QWidget]) -> None:
         """Reemplaza el contenido de la lista, dejando el stretch final en su sitio."""

@@ -14,7 +14,7 @@ _ACCIONES = {
     "instalar": ("↓", VERDE),
     "actualizar": ("↑", AMBAR),
     "desinstalar": ("✕", ROJO),
-    "reparar": ("⟳", CIAN),
+    "normalizar": ("⟳", CIAN),
 }
 
 

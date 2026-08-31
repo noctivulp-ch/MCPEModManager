@@ -34,12 +34,14 @@ class TarjetaDescarga(QWidget):
         analisis: Analisis,
         instalados: dict[str, Instalado],
         es_nuevo: bool = False,
+        mostrar_carpeta: bool = False,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._analisis = analisis
         self._instalados = instalados
         self._es_nuevo = es_nuevo
+        self._mostrar_carpeta = mostrar_carpeta
 
         raiz = QVBoxLayout(self)
         raiz.setContentsMargins(0, 0, 0, 0)
@@ -71,6 +73,11 @@ class TarjetaDescarga(QWidget):
         if self._es_nuevo:
             fila.addWidget(badge("NEW", VERDE))
         fila.addStretch()
+
+        if self._mostrar_carpeta:
+            lbl = QLabel(str(self._analisis.ruta.parent))
+            lbl.setStyleSheet(f"color: {TEXTO_SECUNDARIO}; font-size: 10px;")
+            fila.addWidget(lbl)
         return fila
 
     def _fila_componente(self, componente: Componente) -> QHBoxLayout:

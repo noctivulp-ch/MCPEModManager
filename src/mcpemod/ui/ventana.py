@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
-    QComboBox, QHBoxLayout, QLabel, QMainWindow, QTabWidget, QVBoxLayout, QWidget,
+    QComboBox, QHBoxLayout, QLabel, QMainWindow, QTabWidget, QWidget,
 )
 
 from wulf_qt import GAP_CELDA, Bandeja, Pozo
 
-from mcpemod.core import Instalacion, Installer, Scanner, Store, carpeta_descargas
+from mcpemod.core import Instalacion, Installer, Scanner, Store
 from mcpemod.senales import conectar
 from mcpemod.ui.estilo import TEXTO_SECUNDARIO
 from mcpemod.ui.panel_descargas import PanelDescargas
@@ -94,14 +94,11 @@ class VentanaPrincipal(QMainWindow):
         conectar(self._combo.currentIndexChanged, self._al_elegir_instalacion)
         fila.addWidget(self._combo, stretch=1)
 
-        detalle = QVBoxLayout()
-        detalle.setSpacing(1)
+        # Las carpetas vigiladas se listan en la pestaña de Descargas, que es
+        # donde se gestionan; repetirlas aquí solo cabría si fueran una.
         self._lbl_ruta = QLabel()
-        self._lbl_descargas = QLabel(f"Descargas: {carpeta_descargas()}")
-        for lbl in (self._lbl_ruta, self._lbl_descargas):
-            lbl.setStyleSheet(f"color: {TEXTO_SECUNDARIO}; font-size: 10px;")
-            detalle.addWidget(lbl)
-        fila.addLayout(detalle)
+        self._lbl_ruta.setStyleSheet(f"color: {TEXTO_SECUNDARIO}; font-size: 10px;")
+        fila.addWidget(self._lbl_ruta)
 
         self._actualizar_ruta()
         return Pozo(contenedor)

@@ -57,18 +57,22 @@ códigos de color `§x` y de caracteres que el sistema de archivos no admite:
 `Hide Armor | V1.2` → `Hide Armor V1.2`. Ver
 [ADR 0011](../decisiones/0011-nombre-de-carpeta-legible.md).
 
-## Reparar
+## Formas de instalación
 
-Dos formas de que algo esté en la carpeta y el juego no lo cargue, las dos
-presentes en instalaciones reales:
+El contenido aparece en la carpeta del juego de tres formas, y **las tres son
+válidas** — el juego las admite. Solo la primera es la que produce este gestor:
 
-- **Sin extraer** — un `.mcpack` copiado a `resource_packs/`. El juego solo abre
-  carpetas. Reparar lo instala de verdad y borra el archivo suelto.
-- **Manifiesto anidado** — el pack se extrajo con su carpeta contenedora dentro,
-  así que `manifest.json` quedó un nivel por debajo. Reparar sube el contenido.
+| Forma | Qué es | Badge |
+|---|---|---|
+| Carpeta | `manifest.json` en la raíz de la carpeta | — |
+| Empaquetado | Un `.mcpack` copiado sin extraer | `sin extraer` |
+| Anidado | Extraído con su carpeta contenedora dentro | `carpeta anidada` |
 
-En la lista aparecen con `⚠ el juego no lo carga` y un botón **Reparar**.
-`scripts/auditar_instalacion.py` los enumera sin tocar nada.
+El botón **Extraer** deja las dos últimas como la primera. No las arregla: las
+uniforma, para que actualizarlas y desinstalarlas funcione igual que con el
+resto. Ver [ADR 0014](../decisiones/0014-forma-de-instalacion.md).
+
+`scripts/auditar_instalacion.py` las enumera sin tocar nada.
 
 ## Desinstalar
 
@@ -114,16 +118,36 @@ La identidad es el SHA-256 del contenido, no el nombre. Ver
 
 ## Historial
 
-Cada acción se registra con `accion` (`instalar` · `actualizar` · `reparar` ·
+Cada acción se registra con `accion` (`instalar` · `actualizar` · `normalizar` ·
 `desinstalar`), nombre, categoría, versión, versión anterior y momento. Se
 muestra del más reciente al más antiguo; cuando dos caen en el mismo instante,
 desempata el `id`.
 
+## Carpetas vigiladas
+
+El gestor busca contenido descargado en una lista de carpetas, no en una sola.
+Arranca con la del sistema (`xdg-user-dir DOWNLOAD`; en un escritorio en español,
+`~/Descargas`), y desde la pestaña de Descargas se pueden añadir otras y quitar
+cualquiera — la inicial no tiene estatus especial.
+
+Siempre queda al menos una: quedarse sin ninguna dejaría la pestaña vacía para
+siempre y sin nada que pulsar para recuperarla. Con una sola carpeta el botón de
+quitar ni se dibuja.
+
+Una carpeta que desaparece del disco (un externo desconectado) se salta sin
+romper nada y se muestra marcada, pero no se borra de la lista.
+
+Ver [ADR 0013](../decisiones/0013-carpetas-vigiladas-multiples.md).
+
 ## Observación de directorios
 
 `Scanner` vigila con `QFileSystemWatcher` las cinco carpetas de contenido de la
-instalación activa y la carpeta de descargas. Qt deja de observar un directorio
-si desaparece, así que se re-engancha en cada evento.
+instalación activa y todas las carpetas vigiladas. Qt deja de observar un
+directorio si desaparece, así que se re-engancha en cada evento.
+
+Analizar un archivo cuesta abrir su zip, y con varias carpetas eso se repetiría
+en cada refresco: el análisis se cachea por `(ruta, tamaño, mtime)`, de modo que
+un archivo solo se relee si cambió.
 
 Tras una acción de la propia app se llama a `Scanner.notificar_cambio()` en vez
 de esperar al watcher. Ver [ADR 0005](../decisiones/0005-qfilesystemwatcher-para-monitoreo.md).
