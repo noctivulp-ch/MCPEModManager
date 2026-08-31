@@ -25,6 +25,11 @@ from mcpemod.ui import VentanaPrincipal  # noqa: E402
 
 
 def main() -> None:
+    # Arranca, dibuja un ciclo de eventos y sale con 0. Es lo que ejecuta
+    # `build.sh` sobre el binario ya compilado: el toolchain puede producir un
+    # ejecutable que compila y no arranca, y sin esto no se nota hasta abrirlo.
+    autotest = "--autotest" in sys.argv
+
     APP_DATA.mkdir(parents=True, exist_ok=True)
 
     app = QApplication(sys.argv)
@@ -38,6 +43,11 @@ def main() -> None:
 
     ventana = VentanaPrincipal(store, scanner, installer)
     ventana.show()
+
+    if autotest:
+        app.processEvents()
+        print("autotest: la ventana arranca")
+        return
 
     sys.exit(app.exec())
 

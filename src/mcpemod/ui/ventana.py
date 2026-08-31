@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QHBoxLayout, QMainWindow, QTabWidget, QWidget
 from wulf_qt import Bandeja
 
 from mcpemod.core import Installer, Scanner, Store
+from mcpemod.senales import conectar
 from mcpemod.ui.panel_descargas import PanelDescargas
 from mcpemod.ui.panel_historial import PanelHistorial
 from mcpemod.ui.panel_instalados import PanelInstalados
@@ -26,7 +27,7 @@ class VentanaPrincipal(QMainWindow):
         self._scanner = scanner
         self._installer = installer
         self._construir()
-        scanner.mods_cambiados.connect(self._panel_historial.recargar)
+        conectar(scanner.mods_cambiados, self._panel_historial.recargar)
 
     def _construir(self) -> None:
         self.setWindowTitle(_TITULO)
@@ -52,7 +53,7 @@ class VentanaPrincipal(QMainWindow):
         self._tabs.addTab(self._panel_instalados, "Instalados")
         self._tabs.addTab(self._panel_descargas, "Descargas")
         self._tabs.addTab(self._panel_historial, "Historial")
-        self._tabs.currentChanged.connect(self._al_cambiar_tab)
+        conectar(self._tabs.currentChanged, self._al_cambiar_tab)
 
         bandeja.agregar(self._tabs)
 

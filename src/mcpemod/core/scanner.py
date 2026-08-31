@@ -9,6 +9,7 @@ from PySide6.QtCore import QFileSystemWatcher, QObject, Signal
 
 from .mod import Mod, TipoArchivo
 from .rutas import DESCARGAS_DIR, DIRECTORIOS_INSTALACION, EXTENSIONES_SOPORTADAS, MODS_DIR
+from ..senales import conectar
 from .store import Store
 from .version import detectar_version, nombre_canonico
 
@@ -21,7 +22,7 @@ class Scanner(QObject):
         super().__init__(parent)
         self._store = store
         self._watcher = QFileSystemWatcher(self)
-        self._watcher.directoryChanged.connect(self._al_cambiar_directorio)
+        conectar(self._watcher.directoryChanged, self._al_cambiar_directorio)
         for ruta in (*DIRECTORIOS_INSTALACION, DESCARGAS_DIR):
             self._observar(ruta)
 

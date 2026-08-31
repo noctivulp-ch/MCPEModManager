@@ -5,6 +5,7 @@ from __future__ import annotations
 from PySide6.QtWidgets import QWidget
 
 from mcpemod.core import Installer, Mod, Scanner
+from mcpemod.senales import conectar
 from mcpemod.ui.panel_lista import PanelLista
 from mcpemod.ui.widgets import TarjetaMod
 
@@ -19,14 +20,14 @@ class PanelInstalados(PanelLista):
         super().__init__("Mods instalados", "No hay ningún mod instalado.", parent)
         self._scanner = scanner
         self._installer = installer
-        scanner.mods_cambiados.connect(self.recargar)
+        conectar(scanner.mods_cambiados, self.recargar)
         self.recargar()
 
     def recargar(self) -> None:
         tarjetas = []
         for mod in self._scanner.leer_instalados():
             tarjeta = TarjetaMod(mod)
-            tarjeta.desinstalar_pedido.connect(self._desinstalar)
+            conectar(tarjeta.desinstalar_pedido, self._desinstalar)
             tarjetas.append(tarjeta)
         self._poner(tarjetas)
 

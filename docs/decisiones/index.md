@@ -9,3 +9,4 @@
 | [0005](0005-qfilesystemwatcher-para-monitoreo.md) | QFileSystemWatcher para monitoreo de directorios | Aceptada |
 | [0006](0006-nombre-canonico-para-actualizar.md) | Nombre canónico para rastrear actualizaciones | Aceptada |
 | [0007](0007-rutas-multiples-por-mod.md) | Un mod tiene varias rutas instaladas | Aceptada |
+| [0008](0008-workaround-nuitka-pyside-connect.md) | Envolver los slots al conectar señales (workaround de Nuitka) | Aceptada |

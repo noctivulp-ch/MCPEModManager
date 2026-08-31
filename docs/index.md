@@ -13,3 +13,9 @@ Gestor de mods para mcpelauncher-linux. Instala, desinstala y rastrea archivos `
 ## Decisiones
 
 - [Índice de decisiones (ADRs)](decisiones/index.md)
+
+## Herramientas
+
+- `check.sh` — sintaxis, importaciones, pyflakes, pruebas y arranque real de la UI
+- `build.sh` — compila con Nuitka y comprueba que el binario arranca
+- [`scripts/`](../scripts/) — sondas de diagnóstico que vale la pena conservar
