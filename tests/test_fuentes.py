@@ -198,3 +198,33 @@ def test_solo_se_ofrecen_las_que_pueden_responder():
     from mcpemod.core.fuentes import fuentes_disponibles
     assert [f.nombre for f in fuentes_disponibles()] == ["mcpedl"]
     assert [f.nombre for f in fuentes_disponibles("clave")] == ["mcpedl", "curseforge"]
+
+
+# --- distribución cerrada por el autor ---
+
+def test_curseforge_marca_lo_que_no_deja_descargar(monkeypatch):
+    """El autor puede desactivar la distribución por terceros; entonces la API
+    devuelve los archivos sin `downloadUrl`."""
+    _curseforge_falso(monkeypatch, mods=[
+        {"id": 1, "name": "Cerrado", "latestFiles": [
+            {"fileName": "pack.mcpack", "downloadUrl": None}]},
+    ])
+    p = CurseForge("clave").buscar("x")[0]
+    assert p.distribucion_bloqueada is True
+    assert p.descargas == ()
+    assert p.ultima is None
+
+def test_lo_descargable_no_se_marca(monkeypatch):
+    _curseforge_falso(monkeypatch, mods=[
+        {"id": 1, "name": "Abierto", "latestFiles": [
+            {"fileName": "pack.mcpack", "downloadUrl": "https://cdn/pack.mcpack"}]},
+    ])
+    assert CurseForge("clave").buscar("x")[0].distribucion_bloqueada is False
+
+def test_lo_cerrado_no_se_confunde_con_java(monkeypatch):
+    """Sin `downloadUrl` no hay nombre de archivo con el que juzgar la
+    plataforma: se muestra igual, con su enlace."""
+    _curseforge_falso(monkeypatch, mods=[
+        {"id": 1, "name": "Cerrado", "latestFiles": [{"downloadUrl": None}]},
+    ])
+    assert [p.titulo for p in CurseForge("clave").buscar("x")] == ["Cerrado"]

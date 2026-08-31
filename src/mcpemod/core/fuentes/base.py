@@ -40,6 +40,10 @@ class Publicacion:
     descargas_totales: int = 0
     actualizado: datetime | None = None
     categorias: tuple[str, ...] = field(default=())
+    #: El catálogo publica archivos pero no da con qué bajarlos, porque el autor
+    #: desactivó la distribución por aplicaciones de terceros. Se puede mirar,
+    #: no instalar.
+    distribucion_bloqueada: bool = False
 
     @property
     def ultima(self) -> Descarga | None:

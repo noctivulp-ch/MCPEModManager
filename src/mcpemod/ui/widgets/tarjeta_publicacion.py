@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QSizePolicy
 from wulf_qt import GAP_CELDA, Pozo, Tallado, boton, boton_primario
 
 from mcpemod.core.fuentes import Publicacion
-from mcpemod.ui.estilo import GRIS, SOBRE_POZO, TEXTO_SECUNDARIO, VERDE
+from mcpemod.ui.estilo import AMBAR, GRIS, SOBRE_POZO, TEXTO_SECUNDARIO, VERDE
 from mcpemod.ui.widgets.badge import badge
 
 #: Cuánto resumen cabe en una línea sin que la tarjeta crezca.
@@ -67,6 +67,13 @@ class TarjetaPublicacion(QWidget):
 
         if self._instalado:
             fila.addWidget(badge("✓ ya lo tienes", VERDE))
+        if self._p.distribucion_bloqueada:
+            marca = badge("solo desde su web", AMBAR)
+            marca.setToolTip(
+                "Quien lo publica no permite descargarlo desde aplicaciones\n"
+                "de terceros. Se puede abrir su página e instalarlo a mano."
+            )
+            fila.addWidget(marca)
         for categoria in self._p.categorias[:2]:
             fila.addWidget(badge(categoria, GRIS))
 

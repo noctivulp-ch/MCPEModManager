@@ -261,6 +261,15 @@ pestaña de Actualizaciones ya no tendrá que buscarlo.
 | MCPEDL | Siempre disponible, sin autenticación. Sirve también el catálogo de Bedrock de CurseForge |
 | CurseForge | Necesita una clave gratuita de `console.curseforge.com`, que se pega en **Ajustes**. Sin ella no se ofrece |
 
+La clave la pone el usuario y no viene con la app: los términos de CurseForge
+dicen que es intransferible y que no puede compartirse con terceros. Ver
+[ADR 0021](../decisiones/0021-clave-de-curseforge.md).
+
+En CurseForge, además, quien publica puede desactivar la descarga desde
+aplicaciones de terceros. Esas publicaciones aparecen marcadas con «solo desde su
+web» y con enlace a su página: se pueden mirar e instalar a mano, pero el gestor
+no las descarga por detrás.
+
 ## Rutas del sistema en la interfaz
 
 Las rutas que muestra la app (la de la instalación activa y las carpetas

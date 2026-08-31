@@ -13,6 +13,19 @@ número fijo es un número que se puede equivocar hoy y quedarse obsoleto mañan
 
 Como segunda red, se descartan las publicaciones que no ofrecen ningún archivo
 con extensión de Bedrock: un mod de Java se distribuye en `.jar`.
+
+**La clave la pone el usuario, no la app.** Los términos de CurseForge dicen que
+es «non-transferable and may not be shared with any third party», así que
+repartirla dentro del programa —como hace algún launcher conocido, con un informe
+de incumplimiento abierto y cerrado sin arreglar— no es una opción. La
+alternativa limpia sería un servidor propio que hiciera de intermediario, y esta
+app no tiene servidor.
+
+Además, los autores pueden **desactivar la distribución por terceros** en su
+proyecto. Cuando lo hacen, la API devuelve los archivos sin `downloadUrl`: se
+pueden ver, no descargar. Hay herramientas que reconstruyen la dirección del CDN
+a mano para saltárselo; aquí no, porque es una decisión deliberada de quien
+publica. Esas publicaciones se muestran marcadas y con enlace a su página.
 """
 
 from __future__ import annotations
@@ -114,8 +127,9 @@ class CurseForge:
 def es_de_bedrock(publicacion: Publicacion) -> bool:
     """Segunda red por si el catálogo devolviera contenido de otra plataforma.
 
-    Una publicación sin archivos no se puede descartar por aquí, y tampoco sirve
-    de nada instalarla; se deja pasar para que la trate quien corresponda.
+    Sin archivos con los que juzgar no se descarta: puede ser una publicación de
+    Bedrock cuyo autor cerró la distribución por terceros, y esa merece
+    mostrarse con su enlace aunque no se pueda instalar.
     """
     if not publicacion.descargas:
         return True
@@ -135,6 +149,11 @@ def _fecha(texto) -> datetime | None:
 
 
 def _a_publicacion(x: dict) -> Publicacion:
+    archivos = x.get("latestFiles") or []
+    # `downloadUrl` viene nulo cuando el autor desactivó la distribución por
+    # terceros. Hay archivos, pero no para esta vía.
+    bloqueada = bool(archivos) and not any(a.get("downloadUrl") for a in archivos)
+
     descargas = tuple(
         Descarga(
             nombre=a.get("fileName") or a.get("displayName") or "",
@@ -142,7 +161,7 @@ def _a_publicacion(x: dict) -> Publicacion:
             tamano=int(a.get("fileLength") or 0),
             fecha=_fecha(a.get("fileDate")),
         )
-        for a in (x.get("latestFiles") or [])
+        for a in archivos
         if a.get("downloadUrl")
     )
     autores = x.get("authors") or []
@@ -160,4 +179,5 @@ def _a_publicacion(x: dict) -> Publicacion:
         categorias=tuple(
             c.get("name", "") for c in (x.get("categories") or []) if isinstance(c, dict)
         ),
+        distribucion_bloqueada=bloqueada,
     )
