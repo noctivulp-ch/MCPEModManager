@@ -14,3 +14,5 @@
 | [0014](0014-forma-de-instalacion.md) | La forma de instalación se describe, no se juzga | Aceptada |
 | [0015](0015-arrastrar-y-soltar.md) | Arrastrar decide por lo que es cada cosa | Aceptada |
 | [0016](0016-contenido-de-la-tienda.md) | El contenido de la tienda se detecta y no se toca | Aceptada |
+| [0017](0017-emparejar-con-los-catalogos.md) | Emparejar lo instalado con lo publicado, confirmando por uuid | Aceptada |
+| [0018](0018-leer-manifiestos-remotos.md) | Leer el manifiesto publicado sin descargar el pack | Aceptada |

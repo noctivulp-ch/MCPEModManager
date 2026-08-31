@@ -87,6 +87,28 @@ def _preparar(raiz: Path) -> tuple[Instalacion, Path]:
     return inst, descargas
 
 
+def _sembrar_actualizacion(store) -> None:
+    """Deja un emparejamiento en la base para que la pestaña tenga qué pintar.
+
+    Se siembra en vez de consultar de verdad: el smoke no debe depender de que
+    haya red ni de que un catálogo ajeno esté en pie.
+    """
+    store.guardar_emparejamiento(
+        "uuid-bonito", encontrado=True, fuente="mcpedl", id_publicacion="p-1",
+        titulo="Bonito publicado", autor="Alguien",
+        url_publicacion="https://ejemplo/p-1", confianza="confirmado",
+        version_remota="9.0.0", url_descarga="https://ejemplo/p.mcpack",
+        nombre_archivo="p.mcpack",
+    )
+    store.guardar_emparejamiento(
+        "uuid-nuevo", encontrado=True, fuente="mcpedl", id_publicacion="p-2",
+        titulo="Quizá este", autor="Alguien",
+        url_publicacion="https://ejemplo/p-2", confianza="probable",
+        version_remota="3.0.0", url_descarga="https://ejemplo/q.mcpack",
+        nombre_archivo="q.mcpack",
+    )
+
+
 def _probar_arrastre(app, ventana, raiz: Path) -> None:
     """Recorre el ciclo entero de arrastre, que es donde vive el velo."""
     from PySide6.QtCore import QMimeData, QPoint, Qt, QUrl
@@ -146,7 +168,10 @@ def main() -> int:
         ventana = VentanaPrincipal(store, scanner, installer, [instalacion])
         ventana.show()
 
-        for indice in range(3):
+        _sembrar_actualizacion(store)
+        ventana._panel_actualizaciones._recargar_desde_cache()
+
+        for indice in range(ventana._tabs.count()):
             ventana._tabs.setCurrentIndex(indice)
             app.processEvents()
 

@@ -181,6 +181,52 @@ un archivo solo se relee si cambió.
 Tras una acción de la propia app se llama a `Scanner.notificar_cambio()` en vez
 de esperar al watcher. Ver [ADR 0005](../decisiones/0005-qfilesystemwatcher-para-monitoreo.md).
 
+## Actualizaciones
+
+La pestaña **Actualizaciones** pregunta a los catálogos si hay versión nueva de
+lo que hay instalado.
+
+Ningún catálogo indexa por `header.uuid`, así que el emparejamiento va al revés:
+se buscan candidatos por título, se ponen delante los del mismo autor que declara
+el manifiesto instalado, y se **confirma** leyendo el manifiesto publicado y
+comparando el uuid. Solo el positivo cuenta.
+
+| Confianza | Qué significa | Qué se ofrece |
+|---|---|---|
+| Confirmado | El uuid publicado es el instalado | **Actualizar** |
+| «sin confirmar» | Mismo autor y título, uuid distinto | **Ver**, para decidir |
+| No aparece | No se encontró | — |
+
+Una coincidencia sin confirmar **no** cuenta como actualización: instalarla
+encima podría sobrescribir con un pack que no es el mismo. Pasa de verdad —hay
+autores que cambian el uuid al publicar una versión mayor— y esa decisión es del
+usuario con la publicación delante.
+
+Quedan fuera el contenido de la tienda, lo que no tiene uuid (los mundos) y lo
+que no declara versión.
+
+Actualizar descarga el archivo a un temporal y lo pasa por el mismo camino que
+uno de una carpeta vigilada: el emparejamiento por uuid decide el destino y
+reutiliza la carpeta que ya existía.
+
+### Coste
+
+El primer barrido de sesenta packs lleva unos minutos: son cientos de peticiones.
+La pestaña muestra los resultados según llegan y se puede cancelar. Lo
+comprobado se guarda —también lo no encontrado, que es la mayor parte— así que
+los barridos siguientes salen de la caché al instante y solo se vuelve a
+preguntar pasadas doce horas, o una semana para lo que no apareció.
+
+Ver [ADR 0017](../decisiones/0017-emparejar-con-los-catalogos.md) y
+[ADR 0018](../decisiones/0018-leer-manifiestos-remotos.md).
+
+## Fuentes
+
+| Fuente | Estado |
+|---|---|
+| MCPEDL | Siempre disponible, sin autenticación. Sirve también el catálogo de Bedrock de CurseForge |
+| CurseForge | Necesita una clave gratuita de `console.curseforge.com`, que se pega en **Ajustes**. Sin ella no se ofrece |
+
 ## Rutas del sistema en la interfaz
 
 Las rutas que muestra la app (la de la instalación activa y las carpetas

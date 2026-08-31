@@ -62,6 +62,7 @@ class Instalado:
     #: Contenido comprado en el Marketplace: lo gestiona el juego, no el gestor.
     de_la_tienda: bool = False
     #: Nombre del archivo del que salió, si lo instaló este gestor.
+    autores: tuple[str, ...] = ()
     origen: str | None = None
     instalado_en: datetime | None = None
 

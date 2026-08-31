@@ -47,6 +47,9 @@ class Manifiesto:
     tipos: frozenset[str]
     min_engine: str | None = None
     dependencias: tuple[str, ...] = field(default=())
+    #: `metadata.authors`. Es la señal más barata para distinguir el pack
+    #: original de las reediciones con el mismo nombre al buscar en un catálogo.
+    autores: tuple[str, ...] = field(default=())
 
     @property
     def es_bedrock(self) -> bool:
@@ -125,6 +128,11 @@ def desde_datos(datos: bytes, leer_lang=None) -> Manifiesto:
             str(d.get("uuid", "")).lower()
             for d in datos_json.get("dependencies") or []
             if isinstance(d, dict) and d.get("uuid")
+        ),
+        autores=tuple(
+            str(a).strip()
+            for a in (datos_json.get("metadata") or {}).get("authors") or []
+            if str(a).strip()
         ),
     )
 

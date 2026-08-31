@@ -7,11 +7,13 @@ from PySide6.QtWidgets import (
     QComboBox, QHBoxLayout, QLabel, QMainWindow, QTabWidget, QWidget,
 )
 
-from wulf_qt import GAP_CELDA, Bandeja, Pozo, mostrar_aviso
+from wulf_qt import GAP_CELDA, Bandeja, Pozo, boton_plano, mostrar_aviso
 
 from mcpemod.core import Instalacion, Installer, Scanner, Store
 from mcpemod.senales import conectar
 from mcpemod.ui import soltar
+from mcpemod.ui.dialogo_ajustes import dialogo_ajustes
+from mcpemod.ui.panel_actualizaciones import PanelActualizaciones
 from mcpemod.ui.panel_descargas import PanelDescargas
 from mcpemod.ui.panel_historial import PanelHistorial
 from mcpemod.ui.panel_instalados import PanelInstalados
@@ -22,7 +24,7 @@ _ANCHO_MIN = 820
 _ALTO_MIN = 560
 
 _TAB_CARPETAS = 1
-_TAB_HISTORIAL = 2
+_TAB_HISTORIAL = 3
 
 
 class VentanaPrincipal(QMainWindow):
@@ -62,12 +64,16 @@ class VentanaPrincipal(QMainWindow):
 
         self._panel_instalados = PanelInstalados(self._scanner, self._installer)
         self._panel_descargas = PanelDescargas(self._scanner, self._installer)
+        self._panel_actualizaciones = PanelActualizaciones(
+            self._store, self._scanner, self._installer
+        )
         self._panel_historial = PanelHistorial(self._store)
 
         self._tabs = QTabWidget()
         self._tabs.setDocumentMode(True)
         self._tabs.addTab(self._panel_instalados, "Instalado")
         self._tabs.addTab(self._panel_descargas, "Carpetas")
+        self._tabs.addTab(self._panel_actualizaciones, "Actualizaciones")
         self._tabs.addTab(self._panel_historial, "Historial")
         conectar(self._tabs.currentChanged, self._al_cambiar_tab)
 
@@ -104,7 +110,14 @@ class VentanaPrincipal(QMainWindow):
         self._boton_ruta = boton_ruta(self._scanner.instalacion.com_mojang)
         fila.addWidget(self._boton_ruta)
 
+        ajustes = boton_plano("Ajustes")
+        conectar(ajustes.clicked, self._abrir_ajustes)
+        fila.addWidget(ajustes)
+
         return Pozo(contenedor)
+
+    def _abrir_ajustes(self) -> None:
+        dialogo_ajustes(self._store, self).exec()
 
     def _actualizar_ruta(self) -> None:
         nuevo = boton_ruta(self._scanner.instalacion.com_mojang)

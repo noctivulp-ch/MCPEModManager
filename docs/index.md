@@ -18,7 +18,7 @@ real:
 ## Funciones
 
 - [Gestión de contenido](funciones/gestion-contenido.md) — reconocer, instalar,
-  actualizar, reparar, desinstalar, versiones, historial
+  actualizar desde los catálogos, desinstalar, versiones, historial
 
 ## Decisiones
 

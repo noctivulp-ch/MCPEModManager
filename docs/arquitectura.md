@@ -44,6 +44,7 @@ MCPEModManager/
 │   │   ├── panel_historial.py
 │   │   ├── estilo.py            # Colores derivados de la laca activa
 │   │   ├── soltar.py            # Qué hacer con lo que se arrastra a la ventana
+│   │   ├── trabajo.py           # La comprobación de red, fuera del hilo de la UI
 │   │   └── widgets/
 │   ├── senales.py          # Conexión de señales que sobrevive a Nuitka
 │   └── main.py
@@ -81,6 +82,8 @@ La base guarda solo lo que el disco no sabe:
 | `origenes` | De qué archivo salió cada uuid |
 | `vistos` | Hashes ya mostrados, para el badge NEW |
 | `carpetas` | Dónde buscar contenido descargado |
+| `emparejamientos` | Qué publicación es cada uuid, y qué no se encontró |
+| `ajustes` | La clave de CurseForge |
 
 ## Flujo de datos
 

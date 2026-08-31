@@ -37,6 +37,26 @@ CREATE TABLE IF NOT EXISTS vistos (
     hash TEXT PRIMARY KEY
 );
 
+CREATE TABLE IF NOT EXISTS emparejamientos (
+    uuid            TEXT PRIMARY KEY,
+    encontrado      INTEGER NOT NULL,
+    fuente          TEXT,
+    id_publicacion  TEXT,
+    titulo          TEXT,
+    autor           TEXT,
+    url_publicacion TEXT,
+    confianza       TEXT,
+    version_remota  TEXT,
+    url_descarga    TEXT,
+    nombre_archivo  TEXT,
+    comprobado_en   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ajustes (
+    clave TEXT PRIMARY KEY,
+    valor TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS carpetas (
     ruta       TEXT PRIMARY KEY,
     agregada_en TEXT NOT NULL
@@ -124,6 +144,61 @@ class Store:
         """
         if not self.carpetas():
             self.agregar_carpeta(predeterminada)
+
+    # ── Emparejamientos con los catálogos ─────────────────────────────────────
+
+    def emparejamientos(self) -> dict[str, dict]:
+        """Lo que ya se sabe de cada uuid, por uuid.
+
+        Confirmar un emparejamiento cuesta media docena de peticiones, así que se
+        guarda también el resultado negativo: un pack que no está en ningún
+        catálogo no debe volver a buscarse en cada arranque.
+        """
+        with self._cx() as cx:
+            filas = cx.execute("SELECT * FROM emparejamientos").fetchall()
+        return {
+            f["uuid"]: {
+                **{k: f[k] for k in f.keys() if k != "comprobado_en"},
+                "encontrado": bool(f["encontrado"]),
+                "comprobado_en": datetime.fromisoformat(f["comprobado_en"]),
+            }
+            for f in filas
+        }
+
+    def guardar_emparejamiento(self, uuid: str, *, encontrado: bool, **datos) -> None:
+        columnas = ("fuente", "id_publicacion", "titulo", "autor", "url_publicacion",
+                    "confianza", "version_remota", "url_descarga", "nombre_archivo")
+        with self._cx() as cx:
+            cx.execute(
+                f"""INSERT INTO emparejamientos
+                    (uuid, encontrado, {", ".join(columnas)}, comprobado_en)
+                    VALUES (?, ?, {", ".join("?" * len(columnas))}, ?)
+                    ON CONFLICT(uuid) DO UPDATE SET
+                        encontrado=excluded.encontrado,
+                        {", ".join(f"{c}=excluded.{c}" for c in columnas)},
+                        comprobado_en=excluded.comprobado_en""",
+                (uuid, int(encontrado), *(datos.get(c) for c in columnas),
+                 datetime.now().isoformat()),
+            )
+
+    def olvidar_emparejamientos(self) -> None:
+        with self._cx() as cx:
+            cx.execute("DELETE FROM emparejamientos")
+
+    # ── Ajustes ───────────────────────────────────────────────────────────────
+
+    def ajuste(self, clave: str, por_defecto: str = "") -> str:
+        with self._cx() as cx:
+            fila = cx.execute("SELECT valor FROM ajustes WHERE clave = ?", (clave,)).fetchone()
+        return fila["valor"] if fila else por_defecto
+
+    def guardar_ajuste(self, clave: str, valor: str) -> None:
+        with self._cx() as cx:
+            cx.execute(
+                """INSERT INTO ajustes (clave, valor) VALUES (?, ?)
+                   ON CONFLICT(clave) DO UPDATE SET valor=excluded.valor""",
+                (clave, valor),
+            )
 
     # ── Historial ─────────────────────────────────────────────────────────────
 

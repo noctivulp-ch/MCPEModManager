@@ -39,8 +39,13 @@ class PanelLista(QWidget):
         """Reemplaza el contenido de la lista, dejando el stretch final en su sitio."""
         while self._lista.count() > 1:
             item = self._lista.takeAt(0)
-            if item.widget() is not None:
-                item.widget().deleteLater()
+            widget = item.widget()
+            if widget is not None:
+                # Sacarlo del padre lo quita de la pantalla ya. `deleteLater`
+                # solo marca para borrar, y hasta que el bucle de eventos lo
+                # atiende el widget sigue pintándose encima de los nuevos.
+                widget.setParent(None)
+                widget.deleteLater()
 
         if not widgets:
             widgets = [Tallado(self._texto_vacio, sobre=SOBRE_BANDEJA)]

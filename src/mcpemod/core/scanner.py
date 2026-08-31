@@ -153,6 +153,7 @@ class Scanner(QObject):
             ruta=entrada,
             forma=Forma.CARPETA if carpeta == entrada else Forma.ANIDADO,
             de_la_tienda=es_de_la_tienda(carpeta),
+            autores=manifiesto.autores,
             origen=archivo,
             instalado_en=instalado_en,
         )
