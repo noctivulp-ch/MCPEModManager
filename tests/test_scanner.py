@@ -236,3 +236,40 @@ def test_el_analisis_se_cachea_por_contenido(scanner, descargas, monkeypatch):
     os.utime(ruta, (0, 0))
     scanner.leer_descargas()
     assert len(llamadas) == 2
+
+
+# --- contenido de la tienda ---
+
+def _marcar_de_tienda(carpeta):
+    """Reproduce los dos marcadores que trae el contenido comprado."""
+    from mcpemod.core.manifiesto import MAGIA_CONTENTS
+    (carpeta / "contents.json").write_bytes(b"\x00\x00\x00\x00" + MAGIA_CONTENTS + b"resto")
+    (carpeta / "signatures.json").write_bytes(b"\x00" * 32)
+
+
+def test_pack_normal_no_es_de_la_tienda(scanner, instalacion):
+    _pack_instalado(instalacion.resource_packs, "Bonito", nombre="Bonito", uuid="u")
+    pieza = scanner.leer_instalados()[0]
+    assert pieza.de_la_tienda is False
+    assert pieza.gestionable is True
+
+def test_pack_de_la_tienda_se_detecta(scanner, instalacion):
+    """El contenido comprado viene cifrado y firmado; el descargado por fuera no."""
+    carpeta = _pack_instalado(instalacion.resource_packs, "yQZQHkZBH9Q=",
+                              nombre="Comprado", uuid="u")
+    _marcar_de_tienda(carpeta)
+
+    pieza = scanner.leer_instalados()[0]
+    assert pieza.de_la_tienda is True
+    assert pieza.gestionable is False
+
+def test_basta_la_firma_para_marcarlo(scanner, instalacion):
+    carpeta = _pack_instalado(instalacion.resource_packs, "X", nombre="X", uuid="u")
+    (carpeta / "signatures.json").write_bytes(b"\x00")
+    assert scanner.leer_instalados()[0].de_la_tienda is True
+
+def test_un_contents_json_cualquiera_no_lo_marca(scanner, instalacion):
+    """Se comprueba la cabecera binaria, no solo que el archivo exista."""
+    carpeta = _pack_instalado(instalacion.resource_packs, "X", nombre="X", uuid="u")
+    (carpeta / "contents.json").write_text('{"esto": "es json normal"}')
+    assert scanner.leer_instalados()[0].de_la_tienda is False

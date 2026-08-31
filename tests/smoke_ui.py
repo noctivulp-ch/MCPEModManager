@@ -57,6 +57,15 @@ def _preparar(raiz: Path) -> tuple[Instalacion, Path]:
 
     _pack(inst.resource_packs / "SinExtraer.mcpack", "Sin extraer", "uuid-suelto")
 
+    # Contenido de la tienda: su tarjeta no lleva botones, así que es una rama
+    # distinta de la de un pack normal.
+    from mcpemod.core.manifiesto import MAGIA_CONTENTS
+    comprado = inst.resource_packs / "yQZQHkZBH9Q="
+    comprado.mkdir()
+    (comprado / "manifest.json").write_text(_manifiesto("Comprado", "uuid-tienda"))
+    (comprado / "contents.json").write_bytes(b"\x00" * 4 + MAGIA_CONTENTS)
+    (comprado / "signatures.json").write_bytes(b"\x00" * 16)
+
     mundo = inst.mundos / "bE2ZIuTv+eY="
     mundo.mkdir()
     (mundo / "level.dat").write_bytes(b"nivel")
@@ -131,7 +140,8 @@ def main() -> int:
         installer.instalar(analizar(descargas / "Bonito v2.mcpack"), scanner.indice_por_uuid())
         suelto = next(p for p in scanner.leer_instalados() if p.forma.normalizable)
         installer.normalizar(suelto, scanner.indice_por_uuid())
-        installer.desinstalar(scanner.leer_instalados()[0])
+        gestionable = next(p for p in scanner.leer_instalados() if p.gestionable)
+        installer.desinstalar(gestionable)
 
         ventana = VentanaPrincipal(store, scanner, installer, [instalacion])
         ventana.show()

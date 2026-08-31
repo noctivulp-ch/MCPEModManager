@@ -17,6 +17,10 @@ import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+#: Cabecera del `contents.json` cifrado con que la tienda empaqueta su contenido.
+#: Va en los bytes 4-8, tras cuatro de versión.
+MAGIA_CONTENTS = b"\xfc\xb9\xcf\x9b"
+
 _COMENTARIOS = re.compile(r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*.*?\*/', re.DOTALL)
 _COMAS_COLGANTES = re.compile(r",(\s*[}\]])")
 _CODIGOS_COLOR = re.compile(r"§.")
@@ -155,3 +159,27 @@ def desde_carpeta(carpeta: Path) -> Manifiesto:
         return ruta.read_bytes() if ruta.is_file() else None
 
     return desde_datos((carpeta / "manifest.json").read_bytes(), leer_lang)
+
+
+def es_de_la_tienda(carpeta: Path) -> bool:
+    """Si el pack lo instaló la tienda del juego, y no el usuario por su cuenta.
+
+    El contenido comprado en el Marketplace viene cifrado y firmado: trae un
+    `contents.json` con su cabecera binaria y un `signatures.json`. Ningún pack
+    de los que se descargan por fuera los tiene — en el equipo de prueba, los 43
+    de `com.mojang` no traen ninguno de los dos y los 4 de `premium_cache` traen
+    ambos.
+
+    Importa porque el juego gestiona ese contenido él solo: buscarle
+    actualizaciones en un catálogo público es trabajo tirado, y desinstalarlo a
+    mano es pelearse con el juego.
+    """
+    contents = carpeta / "contents.json"
+    if contents.is_file():
+        try:
+            with contents.open("rb") as f:
+                if f.read(8)[4:8] == MAGIA_CONTENTS:
+                    return True
+        except OSError:
+            pass
+    return (carpeta / "signatures.json").is_file()

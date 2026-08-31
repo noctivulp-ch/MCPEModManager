@@ -15,7 +15,7 @@ from PySide6.QtCore import QFileSystemWatcher, QObject, Signal
 
 from ..senales import conectar
 from .contenido import Analisis, Categoria, analizar, categoria_de
-from .manifiesto import ManifiestoInvalido, desde_carpeta
+from .manifiesto import ManifiestoInvalido, desde_carpeta, es_de_la_tienda
 from .mod import Forma, Instalado, hash_archivo
 from .rutas import Instalacion, carpeta_descargas
 from .store import Store
@@ -152,6 +152,7 @@ class Scanner(QObject):
             categoria=categoria_de(manifiesto.tipos) or categoria,
             ruta=entrada,
             forma=Forma.CARPETA if carpeta == entrada else Forma.ANIDADO,
+            de_la_tienda=es_de_la_tienda(carpeta),
             origen=archivo,
             instalado_en=instalado_en,
         )

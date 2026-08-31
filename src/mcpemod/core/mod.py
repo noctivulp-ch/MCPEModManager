@@ -59,9 +59,21 @@ class Instalado:
     categoria: Categoria
     ruta: Path
     forma: Forma = Forma.CARPETA
+    #: Contenido comprado en el Marketplace: lo gestiona el juego, no el gestor.
+    de_la_tienda: bool = False
     #: Nombre del archivo del que salió, si lo instaló este gestor.
     origen: str | None = None
     instalado_en: datetime | None = None
+
+    @property
+    def gestionable(self) -> bool:
+        """Si tiene sentido que el gestor lo toque.
+
+        Lo de la tienda viene cifrado y firmado, y el juego lo descarga y
+        actualiza él solo: ni se le buscan versiones nuevas en un catálogo
+        público ni se desinstala a mano.
+        """
+        return not self.de_la_tienda
 
 
 @dataclass

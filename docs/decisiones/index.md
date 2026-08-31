@@ -13,3 +13,4 @@
 | [0013](0013-carpetas-vigiladas-multiples.md) | Varias carpetas vigiladas, y ninguna es intocable | Aceptada |
 | [0014](0014-forma-de-instalacion.md) | La forma de instalación se describe, no se juzga | Aceptada |
 | [0015](0015-arrastrar-y-soltar.md) | Arrastrar decide por lo que es cada cosa | Aceptada |
+| [0016](0016-contenido-de-la-tienda.md) | El contenido de la tienda se detecta y no se toca | Aceptada |

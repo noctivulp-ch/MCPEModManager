@@ -8,7 +8,9 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 from wulf_qt import GAP_CELDA, Pozo, Tallado, boton, boton_primario
 
 from mcpemod.core import Instalado
-from mcpemod.ui.estilo import AMBAR, COLOR_CATEGORIA, GRIS, SOBRE_POZO, TEXTO_SECUNDARIO
+from mcpemod.ui.estilo import (
+    AMBAR, COLOR_CATEGORIA, GRIS, SOBRE_POZO, TEXTO_SECUNDARIO, VIOLETA,
+)
 from mcpemod.ui.widgets.badge import badge
 
 
@@ -51,6 +53,8 @@ class TarjetaInstalado(QWidget):
         fila.addWidget(badge(categoria.etiqueta, COLOR_CATEGORIA.get(categoria.value, GRIS)))
         # La forma no es un problema: el juego admite las tres. Se señala porque
         # solo la de carpeta permite actualizar y desinstalar como el resto.
+        if self._pieza.de_la_tienda:
+            fila.addWidget(badge("Tienda", VIOLETA))
         if self._pieza.forma.etiqueta:
             fila.addWidget(badge(self._pieza.forma.etiqueta, AMBAR))
 
@@ -73,6 +77,14 @@ class TarjetaInstalado(QWidget):
         fila = QHBoxLayout()
         fila.setSpacing(GAP_CELDA // 2)
         fila.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+
+        # Lo de la tienda lo descarga y borra el juego: darle un botón de
+        # desinstalar sería ofrecer pelearse con él.
+        if not self._pieza.gestionable:
+            nota = QLabel("lo gestiona el juego")
+            nota.setStyleSheet(f"color: {TEXTO_SECUNDARIO}; font-size: 11px;")
+            fila.addWidget(nota)
+            return fila
 
         if self._pieza.forma.normalizable:
             btn = boton_primario("Extraer")

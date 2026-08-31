@@ -74,6 +74,19 @@ resto. Ver [ADR 0014](../decisiones/0014-forma-de-instalacion.md).
 
 `scripts/auditar_instalacion.py` las enumera sin tocar nada.
 
+## Contenido de la tienda
+
+Lo comprado en el Marketplace lo gestiona el juego: lo descarga, lo actualiza y
+lo borra él. Se reconoce porque viene cifrado y firmado —trae `contents.json`
+con su cabecera binaria y `signatures.json`, que ningún pack descargado por fuera
+tiene— y en la lista sale con el badge `Tienda` y sin botones: «lo gestiona el
+juego».
+
+Queda fuera de la búsqueda de actualizaciones: ese contenido no está en los
+catálogos públicos y comprobarlo sería trabajo tirado.
+
+Ver [ADR 0016](../decisiones/0016-contenido-de-la-tienda.md).
+
 ## Desinstalar
 
 Borra la carpeta del pack y olvida su origen. El archivo del que salió, en la
