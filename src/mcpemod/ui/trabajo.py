@@ -35,6 +35,7 @@ def comprobar_todos(
     total = len(piezas)
     hechos = 0
     error = ""
+    fallos: list[str] = []
 
     with ThreadPoolExecutor(max_workers=EN_PARALELO) as pool:
         tareas = {pool.submit(buscador.comprobar, p): p for p in piezas}
@@ -54,12 +55,19 @@ def comprobar_todos(
                 for pendiente in tareas:
                     pendiente.cancel()
                 break
-            except Exception:  # noqa: BLE001 - un pack roto no para el barrido
+            except Exception as e:  # noqa: BLE001 - un pack roto no para el barrido
+                # Pero tampoco desaparece: tragarse esto en silencio fue lo que
+                # hizo que un fallo de esquema se viera como «cero resultados».
+                fallos.append(f"{pieza.nombre}: {type(e).__name__}: {e}")
                 hechos += 1
                 continue
 
             hechos += 1
             if resultado.encontrado:
                 emitir("encontrado", resultado)
+
+    if not error and fallos:
+        error = (f"{len(fallos)} fallaron. El primero — {fallos[0]}"
+                 if len(fallos) > 1 else fallos[0])
 
     emitir("terminado", hechos, error)

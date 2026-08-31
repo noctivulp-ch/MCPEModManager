@@ -105,3 +105,42 @@ def test_base_del_gestor_anterior_se_abre(tmp_path):
     hist = store.historial()
     assert [(e.accion, e.nombre) for e in hist] == [("instalar", "m.so")]
     assert hist[0].uuid == ""
+
+
+def test_base_sin_las_columnas_nuevas_se_migra(tmp_path):
+    """`CREATE TABLE IF NOT EXISTS` no toca una tabla que ya existe.
+
+    Sin migrar, una base de una versión anterior falla **al escribir**, no al
+    abrir: el error aparece lejos, en mitad de una comprobación, y desde la app
+    se ve como «cero resultados».
+    """
+    import sqlite3
+
+    from mcpemod.core.store import Store
+
+    db = tmp_path / "anterior.db"
+    con = sqlite3.connect(db)
+    con.execute("""
+        CREATE TABLE emparejamientos (
+            uuid TEXT PRIMARY KEY, encontrado INTEGER NOT NULL, fuente TEXT,
+            id_publicacion TEXT, titulo TEXT, autor TEXT, url_publicacion TEXT,
+            version_remota TEXT, url_descarga TEXT, nombre_archivo TEXT,
+            comprobado_en TEXT NOT NULL
+        )
+    """)
+    con.execute(
+        "INSERT INTO emparejamientos (uuid, encontrado, titulo, comprobado_en)"
+        " VALUES ('viejo', 1, 'Ya estaba', ?)", (datetime.now().isoformat(),)
+    )
+    con.commit()
+    con.close()
+
+    store = Store(db)
+    store.guardar_emparejamiento("u-1", encontrado=True, titulo="Nuevo",
+                                 confianza="confirmado", uuid_remoto="v-9")
+
+    guardados = store.emparejamientos()
+    assert guardados["u-1"]["uuid_remoto"] == "v-9"
+    assert guardados["u-1"]["confianza"] == "confirmado"
+    # Y lo que ya había sigue ahí.
+    assert guardados["viejo"]["titulo"] == "Ya estaba"

@@ -72,6 +72,7 @@ class Store:
         with self._cx() as cx:
             _descartar_esquema_v1(cx)
             cx.executescript(_ESQUEMA)
+            _anadir_columnas_nuevas(cx)
 
     @contextmanager
     def _cx(self):
@@ -242,6 +243,30 @@ class Store:
         with self._cx() as cx:
             fila = cx.execute("SELECT 1 FROM vistos WHERE hash = ?", (hash_sha256,)).fetchone()
         return fila is None
+
+
+#: Columnas que se han ido añadiendo a tablas que ya existían en bases anteriores.
+#: `CREATE TABLE IF NOT EXISTS` no toca una tabla que ya está, así que sin esto
+#: una base creada con una versión anterior se queda sin ellas y **falla al
+#: escribir**, no al abrir: el error aparece lejos, en mitad de una operación.
+_COLUMNAS_NUEVAS = {
+    "emparejamientos": {
+        "confianza": "TEXT",
+        "uuid_remoto": "TEXT",
+    },
+}
+
+
+def _anadir_columnas_nuevas(cx: sqlite3.Connection) -> None:
+    for tabla, columnas in _COLUMNAS_NUEVAS.items():
+        existentes = {
+            f["name"] for f in cx.execute(f"PRAGMA table_info({tabla})").fetchall()
+        }
+        if not existentes:
+            continue
+        for nombre, tipo in columnas.items():
+            if nombre not in existentes:
+                cx.execute(f"ALTER TABLE {tabla} ADD COLUMN {nombre} {tipo}")
 
 
 def _descartar_esquema_v1(cx: sqlite3.Connection) -> None:
