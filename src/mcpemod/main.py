@@ -29,6 +29,30 @@ _SIN_JUEGO = (
 )
 
 
+def _trabajo_en_segundo_plano_funciona(app: QApplication) -> bool:
+    """Comprueba el camino entero de una tarea de fondo, sin tocar la red.
+
+    Es lo que el arranque a secas no cubre: los hilos solo entran en juego al
+    pulsar un botón, y ahí es donde ha fallado el binario compilado más de una
+    vez sin que la comprobación se enterara.
+    """
+    from PySide6.QtCore import QElapsedTimer
+
+    from mcpemod.ui.tareas import Tarea
+
+    recibidos: list = []
+    tarea = Tarea()
+    tarea.lanzar(lambda emitir, cancelado: emitir("ok"), recibidos.append)
+
+    reloj = QElapsedTimer()
+    reloj.start()
+    while not recibidos and reloj.elapsed() < 5000:
+        app.processEvents()
+
+    tarea.parar()
+    return bool(recibidos)
+
+
 def main() -> None:
     # Arranca, dibuja un ciclo de eventos y sale con 0. Es lo que ejecuta
     # `build.sh` sobre el binario ya compilado: el toolchain puede producir un
@@ -58,6 +82,10 @@ def main() -> None:
 
     if autotest:
         app.processEvents()
+        if not _trabajo_en_segundo_plano_funciona(app):
+            print("autotest: el trabajo en segundo plano no devuelve resultados")
+            sys.exit(1)
+        ventana.close()
         print("autotest: la ventana arranca")
         return
 

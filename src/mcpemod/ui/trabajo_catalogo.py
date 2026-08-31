@@ -1,39 +1,40 @@
-"""Consultas al catálogo fuera del hilo de la interfaz.
+"""Una consulta al catálogo, para correr en un hilo aparte.
 
-Mismo patrón que `mcpemod.ui.trabajo`, y por las mismas razones: trabajador
-persistente en su hilo, encargos por señal y una única conexión de vuelta.
+Función normal y no `QObject` con señales, por lo mismo que en
+`mcpemod.ui.trabajo`: los resultados vuelven por la cola de
+`mcpemod.ui.tareas`.
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, Signal
+import threading
+from collections.abc import Callable
 
+from mcpemod.core.fuentes import Fuente
 from mcpemod.core.red import ErrorRed
 
 
-class Explorador(QObject):
-    """Busca en un catálogo, o pide sus novedades si no hay texto."""
+def consultar(
+    fuente: Fuente,
+    texto: str,
+    pagina: int,
+    emitir: Callable[..., None],
+    cancelado: threading.Event,
+) -> None:
+    """Busca si hay texto, pide novedades si no.
 
-    #: Encargo: (fuente, texto, página, tanda).
-    pedir = Signal(object, str, int, int)
+    Mensaje: `("listo", publicaciones, error)`.
+    """
+    texto = texto.strip()
+    try:
+        resultados = (
+            fuente.buscar(texto, pagina=pagina) if texto
+            else fuente.recientes(pagina=pagina)
+        )
+    except ErrorRed as e:
+        emitir("listo", [], str(e))
+        return
 
-    #: Respuesta: (tanda, list[Publicacion], error). La tanda vuelve tal cual
-    #: porque al escribir rápido se solapan consultas y llegan desordenadas: el
-    #: panel se queda con la suya y descarta las viejas.
-    listo = Signal(int, object, str)
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.pedir.connect(self._atender)
-
-    def _atender(self, fuente, texto: str, pagina: int, tanda: int) -> None:
-        texto = texto.strip()
-        try:
-            resultados = (
-                fuente.buscar(texto, pagina=pagina) if texto
-                else fuente.recientes(pagina=pagina)
-            )
-        except ErrorRed as e:
-            self.listo.emit(tanda, [], str(e))
-            return
-        self.listo.emit(tanda, resultados, "")
+    # Una consulta que el usuario ya descartó no debe pisar lo que mira ahora.
+    if not cancelado.is_set():
+        emitir("listo", resultados, "")

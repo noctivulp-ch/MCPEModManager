@@ -19,8 +19,8 @@ from mcpemod.senales import conectar
 from mcpemod.ui.ajustes import CLAVE_CURSEFORGE
 from mcpemod.ui.estilo import TEXTO_SECUNDARIO
 from mcpemod.ui.panel_lista import PanelLista
-from mcpemod.ui.trabajo import HiloDeTrabajo
-from mcpemod.ui.trabajo_catalogo import Explorador
+from mcpemod.ui.tareas import Tarea
+from mcpemod.ui.trabajo_catalogo import consultar
 from mcpemod.ui.widgets import TarjetaPublicacion
 
 #: Lo que se espera desde la última tecla antes de consultar. Sin esto, escribir
@@ -40,13 +40,8 @@ class PanelExplorar(PanelLista):
         self._store = store
         self._scanner = scanner
         self._installer = installer
-        self._tanda = 0
         self._pagina = 1
-
-        self._trabajo = HiloDeTrabajo(Explorador())
-        # `connect` directo y no `conectar`: una señal que cruza de hilo necesita
-        # un método de un QObject del hilo de la UI, y esta conexión es única.
-        self._trabajo.trabajador.listo.connect(self._al_recibir)
+        self._tarea = Tarea(self)
 
         self._temporizador = QTimer(self)
         self._temporizador.setSingleShot(True)
@@ -144,16 +139,26 @@ class PanelExplorar(PanelLista):
             self._lbl_estado.setText("No hay ningún catálogo disponible.")
             return
 
-        self._tanda += 1
+        # Al escribir rápido se solapan consultas: la anterior se cancela para
+        # que su respuesta no pise la que se está pidiendo.
+        self._tarea.cancelar()
         self._lbl_estado.setText("Buscando…")
-        self._trabajo.trabajador.pedir.emit(
-            fuente, self._busqueda.text(), self._pagina, self._tanda
+
+        texto, pagina = self._busqueda.text(), self._pagina
+        self._tarea.lanzar(
+            lambda emitir, cancelado: consultar(fuente, texto, pagina, emitir, cancelado),
+            self._al_mensaje,
         )
 
-    def _al_recibir(self, tanda: int, publicaciones: list, error: str) -> None:
-        # Al escribir rápido llegan respuestas de consultas ya superadas.
-        if tanda != self._tanda:
-            return
+    def _al_mensaje(self, mensaje: tuple) -> None:
+        """Reparte lo que llega del hilo de trabajo. Corre en el hilo de la UI."""
+        clase, *datos = mensaje
+        if clase == "listo":
+            self._al_recibir(*datos)
+        elif clase == "error_interno":
+            self._lbl_estado.setText(datos[0])
+
+    def _al_recibir(self, publicaciones: list, error: str) -> None:
         if error:
             self._lbl_estado.setText(error)
             return
@@ -178,8 +183,8 @@ class PanelExplorar(PanelLista):
         )
 
     def parar(self) -> None:
-        """Cierra el hilo de trabajo. Salir con uno vivo termina en un volcado."""
-        self._trabajo.parar()
+        """Corta el trabajo en curso. Se llama al cerrar la ventana."""
+        self._tarea.parar()
 
     def _instalados_por_publicacion(self) -> set[str]:
         return {

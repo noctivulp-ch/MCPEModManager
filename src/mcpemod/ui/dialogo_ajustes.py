@@ -15,6 +15,7 @@ from wulf_qt import GAP_CELDA, Acciones, Dialogo, boton, boton_plano, boton_prim
 
 from mcpemod.core import Store
 from mcpemod.core.fuentes import URL_CONSOLA
+from mcpemod.senales import conectar
 from mcpemod.ui.ajustes import CLAVE_CURSEFORGE
 from mcpemod.ui.estilo import TEXTO_SECUNDARIO
 
@@ -47,7 +48,7 @@ def dialogo_ajustes(store: Store, parent: QWidget | None = None) -> Dialogo:
     layout.addWidget(campo)
 
     enlace = boton_plano("Conseguir una clave en console.curseforge.com")
-    enlace.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(URL_CONSOLA)))
+    conectar(enlace.clicked, lambda: QDesktopServices.openUrl(QUrl(URL_CONSOLA)))
     layout.addWidget(enlace)
 
     guardar = boton_primario("Guardar")
@@ -55,9 +56,10 @@ def dialogo_ajustes(store: Store, parent: QWidget | None = None) -> Dialogo:
     acciones = Acciones(confirmar=guardar, cancelar=cancelar)
 
     dialogo = Dialogo("Ajustes", cuerpo, acciones, parent)
-    guardar.clicked.connect(
+    conectar(
+        guardar.clicked,
         lambda: (store.guardar_ajuste(CLAVE_CURSEFORGE, campo.text().strip()),
-                 dialogo.accept())
+                 dialogo.accept()),
     )
-    cancelar.clicked.connect(dialogo.reject)
+    conectar(cancelar.clicked, dialogo.reject)
     return dialogo

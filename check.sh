@@ -70,14 +70,29 @@ else
     echo "   · pyflakes no instalado (pip install pyflakes)"
 end
 
-# 4. Pruebas unitarias
+# 4. Conexiones de señal
+#
+# Conectar un método de objeto rompe el binario compilado a la segunda vez, y en
+# el intérprete no se nota: la ventana simplemente no abre al compilar.
+paso "Conexiones de señal"
+set salida (env $ENTORNO python "$PROYECTO/scripts/lint_conexiones.py" $SRC 2>&1)
+if test $status -eq 0
+    ok "todas pasan por senales.conectar"
+else
+    fallo "conexiones que romperían el binario:"
+    for linea in $salida
+        echo "     $linea"
+    end
+end
+
+# 5. Pruebas unitarias
 paso "Pruebas unitarias"
 env $ENTORNO QT_QPA_PLATFORM=offscreen python -m pytest "$PROYECTO/tests" -q --tb=short
 if test $status -ne 0
     fallo "pruebas fallidas"
 end
 
-# 5. Arranque real de la UI
+# 6. Arranque real de la UI
 #
 # Es el paso que faltaba y por el que la app llegó a compilar sin arrancar: una
 # llamada con la firma equivocada a `wulf_qt` no la ve ni pyflakes ni pytest,

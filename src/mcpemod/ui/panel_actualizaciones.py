@@ -17,7 +17,8 @@ from mcpemod.senales import conectar
 from mcpemod.ui.ajustes import CLAVE_CURSEFORGE
 from mcpemod.ui.estilo import TEXTO_SECUNDARIO
 from mcpemod.ui.panel_lista import PanelLista
-from mcpemod.ui.trabajo import Comprobador, HiloDeTrabajo
+from mcpemod.ui.tareas import Tarea
+from mcpemod.ui.trabajo import comprobar_todos
 from mcpemod.ui.widgets import TarjetaActualizacion
 
 _VACIO = (
@@ -39,14 +40,7 @@ class PanelActualizaciones(PanelLista):
         self._scanner = scanner
         self._installer = installer
         self._resultados: dict[str, Resultado] = {}
-        self._corriendo = False
-
-        self._trabajo = HiloDeTrabajo(Comprobador())
-        # `connect` directo y no `conectar`: una señal que cruza de hilo necesita
-        # un método de un QObject del hilo de la UI, y estas conexiones son únicas.
-        self._trabajo.trabajador.avance.connect(self._al_avanzar)
-        self._trabajo.trabajador.encontrado.connect(self._al_encontrar)
-        self._trabajo.trabajador.terminado.connect(self._al_terminar)
+        self._tarea = Tarea(self)
 
         self._cabecera(self._barra())
         conectar(scanner.instalados_cambiados, self._recargar_desde_cache)
@@ -94,11 +88,11 @@ class PanelActualizaciones(PanelLista):
         return Buscador(self._store, fuentes_disponibles(clave))
 
     def parar(self) -> None:
-        """Cierra el hilo de trabajo. Salir con uno vivo termina en un volcado."""
-        self._trabajo.parar()
+        """Corta el trabajo en curso. Se llama al cerrar la ventana."""
+        self._tarea.parar()
 
     def _comprobar(self) -> None:
-        if self._corriendo:
+        if self._tarea.corriendo:
             return
 
         buscador = self._buscador()
@@ -107,18 +101,34 @@ class PanelActualizaciones(PanelLista):
             self._lbl_estado.setText("Todo comprobado hace poco. Nada que preguntar.")
             return
 
-        self._corriendo = True
         self._btn_comprobar.hide()
         self._btn_cancelar.show()
         self._progreso.setRange(0, len(pendientes))
         self._progreso.setValue(0)
         self._progreso.show()
-        self._trabajo.trabajador.pedir.emit(buscador, pendientes)
+        self._tarea.lanzar(
+            lambda emitir, cancelado: comprobar_todos(
+                buscador, pendientes, emitir, cancelado
+            ),
+            self._al_mensaje,
+        )
 
     def _cancelar(self) -> None:
-        if self._corriendo:
-            self._trabajo.trabajador.cancelar()
+        if self._tarea.corriendo:
+            self._tarea.cancelar()
             self._lbl_estado.setText("Cancelando…")
+
+    def _al_mensaje(self, mensaje: tuple) -> None:
+        """Reparte lo que llega del hilo de trabajo. Corre en el hilo de la UI."""
+        clase, *datos = mensaje
+        if clase == "avance":
+            self._al_avanzar(*datos)
+        elif clase == "encontrado":
+            self._al_encontrar(*datos)
+        elif clase == "terminado":
+            self._al_terminar(*datos)
+        elif clase == "error_interno":
+            self._al_terminar(0, datos[0])
 
     def _al_avanzar(self, hechos: int, total: int, nombre: str) -> None:
         self._progreso.setValue(hechos)
@@ -129,7 +139,6 @@ class PanelActualizaciones(PanelLista):
         self._repoblar()
 
     def _al_terminar(self, comprobados: int, error: str) -> None:
-        self._corriendo = False
         self._progreso.hide()
         self._btn_cancelar.hide()
         self._btn_comprobar.show()

@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QVBoxLayout, QWi
 
 from wulf_qt import GAP_CELDA, PARED, boton_plano
 
+from mcpemod.senales import conectar
 from mcpemod.ui.estilo import TEXTO_SECUNDARIO
 from mcpemod.ui.widgets.boton_ruta import boton_ruta
 
@@ -45,7 +46,7 @@ class BarraCarpetas(QWidget):
         cabecera.addStretch()
 
         agregar = boton_plano("+ Añadir carpeta")
-        agregar.clicked.connect(self._elegir_carpeta)
+        conectar(agregar.clicked, self._elegir_carpeta)
         cabecera.addWidget(agregar)
 
         contenedor = QWidget()
@@ -70,7 +71,7 @@ class BarraCarpetas(QWidget):
         if quitable:
             quitar = boton_plano("✕")
             quitar.setToolTip(f"Dejar de mirar {carpeta}")
-            quitar.clicked.connect(lambda: self.quitar_pedido.emit(carpeta))
+            conectar(quitar.clicked, lambda: self.quitar_pedido.emit(carpeta))
             fila.addWidget(quitar)
 
         return contenedor

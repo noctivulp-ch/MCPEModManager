@@ -1,4 +1,4 @@
-# 0019 — Trabajadores persistentes para lo que toca la red
+# 0019 — El trabajo de fondo no cruza de hilo con Qt
 
 **Fecha:** 2026-08-31
 **Estado:** Aceptada
@@ -36,33 +36,51 @@ Medido, con un receptor real en cada caso:
 referencia a un objeto que Qt ya había borrado con `deleteLater`, y tocarlo era
 el otro camino al mismo volcado.
 
+## El callejón sin salida
+
+El primer arreglo fue un trabajador persistente por panel, con las señales
+conectadas por `connect` directo a métodos del panel: eso da la afinidad de hilo
+correcta. Y con una sola conexión por trabajador parecía esquivar el fallo de
+Nuitka.
+
+No lo esquivaba. Ese fallo **no tolera ninguna** conexión de método de objeto —
+salta a la segunda del proceso, aunque sean métodos distintos ([ADR 0008](0008-workaround-nuitka-pyside-connect.md)).
+El binario compilado moría al abrir la pestaña de actualizaciones, que conectaba
+tres slots seguidos.
+
+Los dos requisitos se contradicen:
+
+- Para volver al hilo de la interfaz hace falta un método de objeto.
+- Para que el binario arranque no puede haber ninguno.
+
 ## Decisión
 
-Un trabajador **persistente** por panel, en su propio hilo, al que se le piden
-encargos por señal:
+No cruzar de hilo con Qt. El trabajo corre en un **hilo normal de Python** y deja
+lo que produce en una `queue.Queue`, que un `QTimer` del hilo de la interfaz
+vacía cada 80 ms:
 
 ```python
-self._trabajo = HiloDeTrabajo(Explorador())
-self._trabajo.trabajador.listo.connect(self._al_recibir)   # una sola vez
-...
-self._trabajo.trabajador.pedir.emit(fuente, texto, pagina, tanda)
+self._tarea = Tarea(self)
+self._tarea.lanzar(
+    lambda emitir, cancelado: comprobar_todos(buscador, piezas, emitir, cancelado),
+    self._al_mensaje,
+)
 ```
 
-Esto resuelve las dos cosas de una vez:
+La única conexión que queda es la del temporizador, que vive entera dentro del
+hilo de la interfaz y va por `senales.conectar` como todas las demás.
 
-- El slot es un método del panel, que vive en el hilo de la interfaz, así que Qt
-  lo despacha allí. Se usa `connect` directo y **no** `senales.conectar`.
-- Se conecta **una sola vez**, que es lo que el fallo de Nuitka tolera. Con un
-  trabajador por encargo habría una conexión por consulta, que es justo lo que
-  lo dispara.
-- No hay referencias a objetos borrados: el trabajador vive tanto como el panel.
+Ventajas que no se buscaban pero salieron gratis:
 
-Las respuestas que ya no interesan se descartan por número de tanda, no
-cancelando el trabajador. Al escribir rápido se solapan consultas y llegan
-desordenadas.
+- El trabajo es una **función normal**, no un `QObject` con señales: se prueba sin
+  Qt de por medio.
+- Un fallo del trabajo llega como un mensaje más (`error_interno`) en vez de morir
+  en silencio dentro de un hilo.
+- `Tarea.parar()` cancela y espera, que es lo que hay que hacer al cerrar la
+  ventana.
 
-`HiloDeTrabajo.parar()` se llama al cerrar la ventana: salir con un `QThread`
-corriendo termina en un volcado.
+Se hace **un trabajo por vez**: es lo que los paneles necesitan y ahorra tener
+que ordenar respuestas que llegan desordenadas.
 
 ## Consecuencias
 

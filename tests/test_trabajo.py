@@ -1,23 +1,27 @@
-"""Pruebas del trabajo de red fuera del hilo de la interfaz.
+"""Pruebas del trabajo en segundo plano.
 
-Lo que se comprueba aquí no es la red sino **en qué hilo acaba corriendo cada
-cosa**, que es lo que puede reventar la app sin dejar rastro: tocar un widget
-desde otro hilo no da un error, da un volcado más adelante.
+Lo que se comprueba no es la red sino **en qué hilo acaba corriendo cada cosa**,
+que es lo que puede reventar la app sin dejar rastro: tocar un widget desde otro
+hilo no da un error, da un volcado más adelante.
 
-Detrás hay un descubrimiento que costó encontrar: una señal que cruza de hilo
-solo llega bien al hilo de la interfaz si el slot es un método de un `QObject`
-que vive allí. Conectada a una función suelta —una lambda, como hace el helper
-`mcpemod.senales.conectar`— Qt la ejecuta en el hilo del emisor.
+Detrás hay dos hallazgos que costaron encontrar y que se contradicen entre sí:
+
+- Una señal que cruza de hilo solo llega bien al hilo de la interfaz si el slot
+  es un método de un `QObject` que vive allí. Con una lambda, Qt la ejecuta en el
+  hilo del emisor.
+- Conectar un método de objeto es justo lo que rompe el binario compilado: el
+  fallo de Nuitka salta en la **segunda** conexión de cualquier método.
+
+Como no se pueden cumplir las dos, no se cruza de hilo con Qt: el trabajo deja
+sus resultados en una cola que un `QTimer` del hilo de la interfaz vacía.
 """
 
 import threading
 
 import pytest
-from PySide6.QtCore import QCoreApplication, QObject, QTimer
+from PySide6.QtCore import QCoreApplication, QTimer
 
-from mcpemod.senales import conectar
-from mcpemod.ui.trabajo import HiloDeTrabajo
-from mcpemod.ui.trabajo_catalogo import Explorador
+from mcpemod.ui.tareas import Tarea
 
 
 @pytest.fixture(scope="session")
@@ -25,116 +29,120 @@ def qt_app():
     return QCoreApplication.instance() or QCoreApplication([])
 
 
-class Receptor(QObject):
-    def __init__(self):
-        super().__init__()
-        self.hilos = []
-        self.recibido = []
+def _correr_hasta(app, condicion, limite_ms=4000):
+    """Deja correr el bucle de eventos hasta que se cumpla `condicion`."""
+    agotado = {"si": False}
+    tope = QTimer()
+    tope.setSingleShot(True)
+    tope.timeout.connect(lambda: (agotado.update(si=True), app.quit()))
+    tope.start(limite_ms)
 
-    def recibir(self, *args):
-        self.hilos.append(threading.get_ident())
-        self.recibido.append(args)
+    reloj = QTimer()
+    reloj.setInterval(10)
+    reloj.timeout.connect(lambda: condicion() and app.quit())
+    reloj.start()
 
-
-class FuenteFalsa:
-    nombre = "falsa"
-    etiqueta = "Falsa"
-    disponible = True
-
-    def buscar(self, texto, pagina=1, por_pagina=20):
-        return [f"buscado:{texto}"]
-
-    def recientes(self, pagina=1, por_pagina=20):
-        return ["reciente"]
-
-
-def _correr_hasta(app, condicion, limite_ms=5000):
-    fin = {"corta": False}
-    QTimer.singleShot(limite_ms, lambda: (fin.update(corta=True), app.quit()))
-    temporizador = QTimer()
-    temporizador.setInterval(10)
-    temporizador.timeout.connect(lambda: condicion() and app.quit())
-    temporizador.start()
     app.exec()
-    temporizador.stop()
-    return not fin["corta"]
+    reloj.stop()
+    tope.stop()
+    return not agotado["si"]
 
 
-def test_el_slot_corre_en_el_hilo_de_la_interfaz(qt_app):
-    """Es la razón de todo el aparato de trabajadores persistentes."""
-    receptor = Receptor()
-    trabajo = HiloDeTrabajo(Explorador())
-    trabajo.trabajador.listo.connect(receptor.recibir)
+def test_los_mensajes_llegan_en_el_hilo_de_la_interfaz(qt_app):
+    """Es la razón de que el trabajo no use señales de Qt entre hilos."""
+    recibidos = []
+    tarea = Tarea()
 
-    trabajo.trabajador.pedir.emit(FuenteFalsa(), "", 1, 1)
-    assert _correr_hasta(qt_app, lambda: bool(receptor.hilos))
-    trabajo.parar()
+    def trabajo(emitir, cancelado):
+        emitir("hola", threading.get_ident())
 
-    assert receptor.hilos == [threading.get_ident()]
+    tarea.lanzar(trabajo, lambda m: recibidos.append((m, threading.get_ident())))
+    assert _correr_hasta(qt_app, lambda: bool(recibidos))
+    tarea.parar()
 
-
-def test_una_lambda_no_vuelve_al_hilo_de_la_interfaz(qt_app):
-    """Documenta el límite de `senales.conectar`, que envuelve en lambda.
-
-    Si esto empieza a fallar es que Qt cambió de comportamiento y el aparato de
-    trabajadores persistentes se puede simplificar.
-    """
-    receptor = Receptor()
-    trabajo = HiloDeTrabajo(Explorador())
-    conectar(trabajo.trabajador.listo, receptor.recibir)
-
-    trabajo.trabajador.pedir.emit(FuenteFalsa(), "", 1, 1)
-    assert _correr_hasta(qt_app, lambda: bool(receptor.hilos))
-    trabajo.parar()
-
-    assert receptor.hilos != [threading.get_ident()]
+    (mensaje, hilo_receptor), = recibidos
+    assert mensaje[0] == "hola"
+    assert hilo_receptor == threading.get_ident()
+    # Y el trabajo sí corrió fuera: si no, no habría hecho falta nada de esto.
+    assert mensaje[1] != threading.get_ident()
 
 
-def test_la_consulta_llega_con_su_tanda(qt_app):
-    receptor = Receptor()
-    trabajo = HiloDeTrabajo(Explorador())
-    trabajo.trabajador.listo.connect(receptor.recibir)
-
-    trabajo.trabajador.pedir.emit(FuenteFalsa(), "xray", 1, 7)
-    assert _correr_hasta(qt_app, lambda: bool(receptor.recibido))
-    trabajo.parar()
-
-    tanda, resultados, error = receptor.recibido[0]
-    assert (tanda, resultados, error) == (7, ["buscado:xray"], "")
-
-
-def test_sin_texto_pide_las_novedades(qt_app):
-    receptor = Receptor()
-    trabajo = HiloDeTrabajo(Explorador())
-    trabajo.trabajador.listo.connect(receptor.recibir)
-
-    trabajo.trabajador.pedir.emit(FuenteFalsa(), "   ", 1, 1)
-    assert _correr_hasta(qt_app, lambda: bool(receptor.recibido))
-    trabajo.parar()
-
-    assert receptor.recibido[0][1] == ["reciente"]
+def test_los_mensajes_llegan_en_orden(qt_app):
+    recibidos = []
+    tarea = Tarea()
+    tarea.lanzar(
+        lambda emitir, cancelado: [emitir("n", i) for i in range(5)],
+        lambda m: recibidos.append(m[1]),
+    )
+    assert _correr_hasta(qt_app, lambda: len(recibidos) == 5)
+    tarea.parar()
+    assert recibidos == [0, 1, 2, 3, 4]
 
 
-def test_un_error_de_red_llega_como_mensaje(qt_app):
-    from mcpemod.core.red import ErrorRed
+def test_solo_un_trabajo_a_la_vez(qt_app):
+    """Los paneles hacen uno por vez; así no hay que ordenar respuestas."""
+    puerta = threading.Event()
+    tarea = Tarea()
 
-    class Rota(FuenteFalsa):
-        def recientes(self, pagina=1, por_pagina=20):
-            raise ErrorRed("sin conexión")
+    assert tarea.lanzar(lambda emitir, cancelado: puerta.wait(2), lambda m: None)
+    assert tarea.lanzar(lambda emitir, cancelado: None, lambda m: None) is False
 
-    receptor = Receptor()
-    trabajo = HiloDeTrabajo(Explorador())
-    trabajo.trabajador.listo.connect(receptor.recibir)
-
-    trabajo.trabajador.pedir.emit(Rota(), "", 1, 1)
-    assert _correr_hasta(qt_app, lambda: bool(receptor.recibido))
-    trabajo.parar()
-
-    assert receptor.recibido[0][2] == "sin conexión"
+    puerta.set()
+    tarea.parar()
 
 
-def test_parar_deja_el_hilo_cerrado(qt_app):
-    """Salir con un QThread corriendo termina en un volcado."""
-    trabajo = HiloDeTrabajo(Explorador())
-    trabajo.parar()
-    assert not trabajo._hilo.isRunning()
+def test_cancelar_se_ve_desde_el_trabajo(qt_app):
+    visto = []
+    tarea = Tarea()
+
+    def trabajo(emitir, cancelado):
+        for i in range(200):
+            if cancelado.is_set():
+                emitir("cortado", i)
+                return
+            threading.Event().wait(0.01)
+        emitir("terminado", 200)
+
+    tarea.lanzar(trabajo, lambda m: visto.append(m))
+    QTimer.singleShot(60, tarea.cancelar)
+    assert _correr_hasta(qt_app, lambda: bool(visto))
+    tarea.parar()
+
+    assert visto[0][0] == "cortado"
+
+
+def test_un_fallo_del_trabajo_no_se_pierde(qt_app):
+    """Un hilo que muere en silencio deja la interfaz esperando para siempre."""
+    recibidos = []
+    tarea = Tarea()
+
+    def trabajo(emitir, cancelado):
+        raise RuntimeError("algo se rompió")
+
+    tarea.lanzar(trabajo, lambda m: recibidos.append(m))
+    assert _correr_hasta(qt_app, lambda: bool(recibidos))
+    tarea.parar()
+
+    assert recibidos[0][0] == "error_interno"
+    assert "algo se rompió" in recibidos[0][1]
+
+
+def test_parar_espera_al_hilo(qt_app):
+    """Salir dejando trabajo vivo es lo que termina en un volcado."""
+    tarea = Tarea()
+    tarea.lanzar(lambda emitir, cancelado: cancelado.wait(5), lambda m: None)
+    tarea.parar()
+    assert not tarea.corriendo
+
+
+def test_lo_que_quedo_de_la_anterior_no_ensucia_la_siguiente(qt_app):
+    recibidos = []
+    tarea = Tarea()
+    tarea.lanzar(lambda emitir, cancelado: emitir("vieja"), lambda m: None)
+    assert _correr_hasta(qt_app, lambda: not tarea.corriendo)
+
+    tarea.lanzar(lambda emitir, cancelado: emitir("nueva"), lambda m: recibidos.append(m))
+    assert _correr_hasta(qt_app, lambda: bool(recibidos))
+    tarea.parar()
+
+    assert [m[0] for m in recibidos] == ["nueva"]
