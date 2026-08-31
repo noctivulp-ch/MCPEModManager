@@ -60,14 +60,15 @@ pero resolvería buena parte de los 27 que hoy no se encuentran.
 **Avisar al arrancar.** Comprobar en segundo plano al abrir la app y poner el
 número en la pestaña: «Actualizaciones (21)». Sin pedirlo, sin bloquear.
 
-**Modrinth.** Tiene API pública sin clave y política abierta de distribución, que
-es justo lo que a CurseForge le falta. Está empezando a alojar contenido de
-Bedrock. Sería la tercera fuente con menos fricción de todas.
-
 **Más catálogos.** La interfaz `Fuente` está pensada para eso; añadir uno es un
-archivo. Candidatos: MCPEDL ya cubre CurseForge, así que lo que aportaría algo
-distinto son los repositorios pequeños y los sitios de addons chinos, que tienen
-contenido que no está en ninguno de los dos.
+archivo. Lo que aportaría algo distinto son los repositorios pequeños y los
+sitios de addons que no están en MCPEDL ni en CurseForge.
+
+**Modrinth queda descartado**: se comprobó contra su API y **no aloja contenido
+de Bedrock**. Sus tipos de proyecto son `mod`, `modpack`, `resourcepack`,
+`shader`, `plugin`, `datapack` y `minecraft_java_server`, y ninguno de sus
+«loaders» es de Bedrock. Buscar «bedrock» ahí devuelve mods de Java que hablan
+del bloque bedrock.
 
 ## Calidad de vida
 

@@ -88,6 +88,18 @@ resto. Ver [ADR 0014](../decisiones/0014-forma-de-instalacion.md).
 
 `scripts/auditar_instalacion.py` las enumera sin tocar nada.
 
+## La página del pack
+
+Algunos manifiestos declaran `metadata.url`, la página de quien lo publica —7 de
+los 43 packs del equipo de prueba—. Cuando está, la tarjeta muestra un botón
+**Sitio** que la abre.
+
+Sirve además para emparejar: esa dirección señala la publicación directamente, así
+que al buscar en un catálogo el candidato cuya URL coincide se mira antes que
+ningún otro. Es la pista más fuerte que hay, por delante del autor.
+
+También se lee `metadata.license` y se muestra junto a los detalles.
+
 ## Contenido de la tienda
 
 Lo comprado en el Marketplace lo gestiona el juego: lo descarga, lo actualiza y

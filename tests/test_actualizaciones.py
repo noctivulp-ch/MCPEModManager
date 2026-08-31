@@ -299,3 +299,30 @@ def test_sin_version_no_se_comprueba(store):
 def test_sin_red_no_inventa_resultados(store, remoto):
     r = Buscador(store, [FuenteFalsa(error=True)]).comprobar(_instalado())
     assert not r.encontrado
+
+
+# --- la página que declara el propio pack ---
+
+def test_la_url_declarada_manda_sobre_todo_lo_demas(remoto):
+    """`metadata.url` señala directamente la publicación: es la pista más fuerte
+    y hay que gastar en ella las pocas lecturas disponibles."""
+    pieza = _instalado(nombre="Bonito", autores=("Alguien",))
+    pieza = Instalado(**{**pieza.__dict__,
+                        "url": "https://www.curseforge.com/minecraft-bedrock/el-bueno"})
+    candidatos = [
+        _publicacion(titulo="Bonito", autor="Alguien", id="p-parecido"),
+        Publicacion(fuente="falsa", id="p-declarado", titulo="Otro nombre",
+                    autor="Ajeno",
+                    url="https://curseforge.com/minecraft-bedrock/el-bueno/",
+                    descargas=(Descarga(nombre="a", url="https://cdn/a.mcpack"),)),
+    ]
+    assert _ordenar(candidatos, pieza)[0].id == "p-declarado"
+
+def test_sin_url_declarada_manda_el_autor(remoto):
+    pieza = _instalado(nombre="Bonito", autores=("Alguien",))
+    candidatos = [
+        _publicacion(titulo="Bonito", autor="Ajeno", id="p-ajeno",
+                     descargas_totales=9999),
+        _publicacion(titulo="Bonito", autor="Alguien", id="p-suyo"),
+    ]
+    assert _ordenar(candidatos, pieza)[0].id == "p-suyo"

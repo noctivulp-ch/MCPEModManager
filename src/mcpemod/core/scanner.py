@@ -175,6 +175,8 @@ class Scanner(QObject):
             forma=Forma.CARPETA if carpeta == entrada else Forma.ANIDADO,
             de_la_tienda=es_de_la_tienda(carpeta),
             autores=manifiesto.autores,
+            url=manifiesto.url,
+            licencia=manifiesto.licencia,
             origen=archivo,
             instalado_en=instalado_en,
         )
@@ -202,6 +204,8 @@ class Scanner(QObject):
             # Sin esto, un pack en esta forma llega a la búsqueda sin autor, y
             # el autor es lo que permite reconocerlo cuando el uuid cambió.
             autores=c.manifiesto.autores if c.manifiesto else (),
+            url=c.manifiesto.url if c.manifiesto else "",
+            licencia=c.manifiesto.licencia if c.manifiesto else "",
         )
 
     def _leer_mundo(self, carpeta: Path) -> Instalado | None:

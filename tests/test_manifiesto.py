@@ -142,3 +142,25 @@ def test_dependencias():
         "dependencies": [{"uuid": "OTRO-UUID", "version": [1, 0, 0]}],
     }))
     assert m.dependencias == ("otro-uuid",)
+
+
+# --- metadata ---
+
+def test_lee_la_pagina_declarada_por_el_pack():
+    """`metadata.url` la declaran pocos packs, pero cuando está señala su
+    publicación y ahorra tener que adivinar cuál es."""
+    m = desde_datos(_bytes({
+        "header": {"name": "x", "uuid": "u", "version": [1, 0, 0]},
+        "modules": [{"type": "resources"}],
+        "metadata": {"url": "https://www.curseforge.com/minecraft-bedrock/x",
+                     "license": "MIT", "authors": ["Alguien"]},
+    }))
+    assert m.url == "https://www.curseforge.com/minecraft-bedrock/x"
+    assert m.licencia == "MIT"
+    assert m.autores == ("Alguien",)
+
+def test_sin_metadata_no_falla():
+    m = desde_datos(_bytes({"header": {"name": "x", "uuid": "u", "version": [1, 0, 0]},
+                            "modules": [{"type": "resources"}]}))
+    assert m.url == ""
+    assert m.licencia == ""

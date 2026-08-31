@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from wulf_qt import GAP_CELDA, Pozo, Tallado, boton, boton_primario
@@ -68,6 +69,8 @@ class TarjetaInstalado(QWidget):
         partes.append(f"carpeta: {self._pieza.ruta.name}")
         if self._pieza.origen:
             partes.append(f"desde: {self._pieza.origen}")
+        if self._pieza.licencia:
+            partes.append(self._pieza.licencia)
 
         lbl = QLabel("  ·  ".join(partes))
         lbl.setStyleSheet(f"color: {TEXTO_SECUNDARIO}; font-size: 11px;")
@@ -85,6 +88,16 @@ class TarjetaInstalado(QWidget):
             nota.setStyleSheet(f"color: {TEXTO_SECUNDARIO}; font-size: 11px;")
             fila.addWidget(nota)
             return fila
+
+        # Pocos packs declaran su página en `metadata.url`, pero cuando está es
+        # el camino directo al sitio de quien lo hizo.
+        if self._pieza.url:
+            sitio = boton("Sitio")
+            sitio.setToolTip(self._pieza.url)
+            sitio.clicked.connect(
+                lambda: QDesktopServices.openUrl(QUrl(self._pieza.url))
+            )
+            fila.addWidget(sitio)
 
         if self._pieza.forma.normalizable:
             btn = boton_primario("Extraer")

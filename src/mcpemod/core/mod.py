@@ -65,6 +65,9 @@ class Instalado:
     de_la_tienda: bool = False
     #: Nombre del archivo del que salió, si lo instaló este gestor.
     autores: tuple[str, ...] = ()
+    #: La página que declara el propio pack en `metadata.url`, si la declara.
+    url: str = ""
+    licencia: str = ""
     origen: str | None = None
     instalado_en: datetime | None = None
 

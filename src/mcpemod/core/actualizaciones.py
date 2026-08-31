@@ -346,19 +346,24 @@ def _sin_adornos(nombre: str) -> str:
 
 
 def _ordenar(candidatos: list[Publicacion], pieza: Instalado) -> list[Publicacion]:
-    """Primero los que más se parecen: mismo autor, luego título parecido.
+    """Primero los que más se parecen, para gastar las pocas lecturas en ellos.
 
-    El autor es la señal fuerte y barata — sale del `metadata.authors` del
-    manifiesto instalado y es lo que distingue el pack original de las diez
+    La señal más fuerte es la página que el propio pack declara en
+    `metadata.url`: cuando está, señala directamente su publicación y no hay nada
+    que adivinar. La declaran pocos, así que después va el autor, que sale de
+    `metadata.authors` y es lo que distingue el pack original de las diez
     reediciones con el mismo nombre.
     """
     autores = {a.lower() for a in pieza.autores}
     objetivo = _sin_adornos(pieza.nombre).lower()
+    declarada = _normalizar_url(pieza.url)
 
     def puntuar(c: Publicacion) -> tuple:
+        misma_url = bool(declarada) and _normalizar_url(c.url) == declarada
         mismo_autor = any(a and a in c.autor.lower() for a in autores)
         titulo = _sin_adornos(c.titulo).lower()
         return (
+            not misma_url,
             not mismo_autor,
             not (titulo == objetivo),
             not (objetivo in titulo or titulo in objetivo),
@@ -366,6 +371,11 @@ def _ordenar(candidatos: list[Publicacion], pieza: Instalado) -> list[Publicacio
         )
 
     return sorted(candidatos, key=puntuar)
+
+
+def _normalizar_url(url: str) -> str:
+    """Para comparar direcciones que solo difieren en la barra final o el `www`."""
+    return url.strip().lower().rstrip("/").replace("://www.", "://") if url else ""
 
 
 def _probable(candidatos: list[Publicacion], pieza: Instalado) -> Publicacion | None:

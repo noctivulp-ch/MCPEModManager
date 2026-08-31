@@ -50,6 +50,10 @@ class Manifiesto:
     #: `metadata.authors`. Es la señal más barata para distinguir el pack
     #: original de las reediciones con el mismo nombre al buscar en un catálogo.
     autores: tuple[str, ...] = field(default=())
+    #: `metadata.url`, la página del pack. Lo declaran pocos, pero cuando está
+    #: apunta directo a la publicación y ahorra tener que adivinar cuál es.
+    url: str = ""
+    licencia: str = ""
 
     @property
     def es_bedrock(self) -> bool:
@@ -134,6 +138,8 @@ def desde_datos(datos: bytes, leer_lang=None) -> Manifiesto:
             for a in (datos_json.get("metadata") or {}).get("authors") or []
             if str(a).strip()
         ),
+        url=str((datos_json.get("metadata") or {}).get("url") or "").strip(),
+        licencia=str((datos_json.get("metadata") or {}).get("license") or "").strip(),
     )
 
 
