@@ -20,6 +20,11 @@ real:
 - [Gestión de contenido](funciones/gestion-contenido.md) — reconocer, instalar,
   actualizar desde los catálogos, desinstalar, versiones, historial
 
+## Ideas
+
+- [Lluvia de ideas](ideas.md) — candidatas anotadas sobre la marcha, con lo que
+  costarían y lo que darían
+
 ## Decisiones
 
 - [Índice de decisiones (ADRs)](decisiones/index.md)
