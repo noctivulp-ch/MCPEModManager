@@ -220,6 +220,17 @@ preguntar pasadas doce horas, o una semana para lo que no apareció.
 Ver [ADR 0017](../decisiones/0017-emparejar-con-los-catalogos.md) y
 [ADR 0018](../decisiones/0018-leer-manifiestos-remotos.md).
 
+## Explorar
+
+La pestaña **Explorar** busca en el catálogo y instala sin pasar por el
+navegador. Sin texto muestra las novedades; con texto, busca. Se espera un
+momento desde la última tecla antes de consultar, y las respuestas de consultas
+ya superadas se descartan.
+
+Instalar descarga el archivo y lo pasa por el mismo camino que uno de una carpeta
+vigilada. Además se recuerda de qué publicación vino cada uuid, así que la
+pestaña de Actualizaciones ya no tendrá que buscarlo.
+
 ## Fuentes
 
 | Fuente | Estado |

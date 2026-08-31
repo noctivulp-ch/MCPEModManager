@@ -17,7 +17,7 @@ from mcpemod.senales import conectar
 from mcpemod.ui.ajustes import CLAVE_CURSEFORGE
 from mcpemod.ui.estilo import TEXTO_SECUNDARIO
 from mcpemod.ui.panel_lista import PanelLista
-from mcpemod.ui.trabajo import Comprobador, en_hilo
+from mcpemod.ui.trabajo import Comprobador, HiloDeTrabajo
 from mcpemod.ui.widgets import TarjetaActualizacion
 
 _VACIO = (
@@ -39,7 +39,14 @@ class PanelActualizaciones(PanelLista):
         self._scanner = scanner
         self._installer = installer
         self._resultados: dict[str, Resultado] = {}
-        self._comprobador: Comprobador | None = None
+        self._corriendo = False
+
+        self._trabajo = HiloDeTrabajo(Comprobador())
+        # `connect` directo y no `conectar`: una señal que cruza de hilo necesita
+        # un método de un QObject del hilo de la UI, y estas conexiones son únicas.
+        self._trabajo.trabajador.avance.connect(self._al_avanzar)
+        self._trabajo.trabajador.encontrado.connect(self._al_encontrar)
+        self._trabajo.trabajador.terminado.connect(self._al_terminar)
 
         self._cabecera(self._barra())
         conectar(scanner.instalados_cambiados, self._recargar_desde_cache)
@@ -86,8 +93,12 @@ class PanelActualizaciones(PanelLista):
         clave = self._store.ajuste(CLAVE_CURSEFORGE)
         return Buscador(self._store, fuentes_disponibles(clave))
 
+    def parar(self) -> None:
+        """Cierra el hilo de trabajo. Salir con uno vivo termina en un volcado."""
+        self._trabajo.parar()
+
     def _comprobar(self) -> None:
-        if self._comprobador is not None:
+        if self._corriendo:
             return
 
         buscador = self._buscador()
@@ -96,21 +107,17 @@ class PanelActualizaciones(PanelLista):
             self._lbl_estado.setText("Todo comprobado hace poco. Nada que preguntar.")
             return
 
-        self._comprobador = Comprobador(buscador, pendientes)
-        conectar(self._comprobador.avance, self._al_avanzar)
-        conectar(self._comprobador.encontrado, self._al_encontrar)
-        conectar(self._comprobador.terminado, self._al_terminar)
-
+        self._corriendo = True
         self._btn_comprobar.hide()
         self._btn_cancelar.show()
         self._progreso.setRange(0, len(pendientes))
         self._progreso.setValue(0)
         self._progreso.show()
-        en_hilo(self._comprobador)
+        self._trabajo.trabajador.pedir.emit(buscador, pendientes)
 
     def _cancelar(self) -> None:
-        if self._comprobador is not None:
-            self._comprobador.cancelar()
+        if self._corriendo:
+            self._trabajo.trabajador.cancelar()
             self._lbl_estado.setText("Cancelando…")
 
     def _al_avanzar(self, hechos: int, total: int, nombre: str) -> None:
@@ -122,7 +129,7 @@ class PanelActualizaciones(PanelLista):
         self._repoblar()
 
     def _al_terminar(self, comprobados: int, error: str) -> None:
-        self._comprobador = None
+        self._corriendo = False
         self._progreso.hide()
         self._btn_cancelar.hide()
         self._btn_comprobar.show()

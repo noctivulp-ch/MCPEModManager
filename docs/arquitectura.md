@@ -44,7 +44,11 @@ MCPEModManager/
 │   │   ├── panel_historial.py
 │   │   ├── estilo.py            # Colores derivados de la laca activa
 │   │   ├── soltar.py            # Qué hacer con lo que se arrastra a la ventana
-│   │   ├── trabajo.py           # La comprobación de red, fuera del hilo de la UI
+│   │   ├── trabajo.py           # Trabajador persistente: comprobar actualizaciones
+│   │   ├── trabajo_catalogo.py  # Trabajador persistente: consultar el catálogo
+│   │   ├── panel_actualizaciones.py
+│   │   ├── panel_explorar.py
+│   │   ├── dialogo_ajustes.py   # La clave de CurseForge
 │   │   └── widgets/
 │   ├── senales.py          # Conexión de señales que sobrevive a Nuitka
 │   └── main.py

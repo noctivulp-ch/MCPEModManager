@@ -179,6 +179,11 @@ def main() -> int:
 
         assert store.historial(), "el historial quedó vacío"
 
+        # Cerrar de verdad: salir con un QThread corriendo termina en un volcado,
+        # y eso no se ve hasta que el proceso muere.
+        ventana.close()
+        app.processEvents()
+
     print("smoke UI: OK")
     return 0
 

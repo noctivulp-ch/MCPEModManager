@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtGui import QDragEnterEvent, QDragLeaveEvent, QDropEvent
+from PySide6.QtGui import QCloseEvent, QDragEnterEvent, QDragLeaveEvent, QDropEvent
 from PySide6.QtWidgets import (
     QComboBox, QHBoxLayout, QLabel, QMainWindow, QTabWidget, QWidget,
 )
@@ -15,6 +15,7 @@ from mcpemod.ui import soltar
 from mcpemod.ui.dialogo_ajustes import dialogo_ajustes
 from mcpemod.ui.panel_actualizaciones import PanelActualizaciones
 from mcpemod.ui.panel_descargas import PanelDescargas
+from mcpemod.ui.panel_explorar import PanelExplorar
 from mcpemod.ui.panel_historial import PanelHistorial
 from mcpemod.ui.panel_instalados import PanelInstalados
 from mcpemod.ui.widgets import VeloSoltar, boton_ruta
@@ -24,7 +25,7 @@ _ANCHO_MIN = 820
 _ALTO_MIN = 560
 
 _TAB_CARPETAS = 1
-_TAB_HISTORIAL = 3
+_TAB_HISTORIAL = 4
 
 
 class VentanaPrincipal(QMainWindow):
@@ -67,6 +68,7 @@ class VentanaPrincipal(QMainWindow):
         self._panel_actualizaciones = PanelActualizaciones(
             self._store, self._scanner, self._installer
         )
+        self._panel_explorar = PanelExplorar(self._store, self._scanner, self._installer)
         self._panel_historial = PanelHistorial(self._store)
 
         self._tabs = QTabWidget()
@@ -74,6 +76,7 @@ class VentanaPrincipal(QMainWindow):
         self._tabs.addTab(self._panel_instalados, "Instalado")
         self._tabs.addTab(self._panel_descargas, "Carpetas")
         self._tabs.addTab(self._panel_actualizaciones, "Actualizaciones")
+        self._tabs.addTab(self._panel_explorar, "Explorar")
         self._tabs.addTab(self._panel_historial, "Historial")
         conectar(self._tabs.currentChanged, self._al_cambiar_tab)
 
@@ -117,7 +120,10 @@ class VentanaPrincipal(QMainWindow):
         return Pozo(contenedor)
 
     def _abrir_ajustes(self) -> None:
-        dialogo_ajustes(self._store, self).exec()
+        if dialogo_ajustes(self._store, self).exec():
+            # Pegar la clave de CurseForge añade un catálogo: la pestaña de
+            # explorar tiene que enterarse sin reiniciar la app.
+            self._panel_explorar.refrescar_fuentes()
 
     def _actualizar_ruta(self) -> None:
         nuevo = boton_ruta(self._scanner.instalacion.com_mojang)
@@ -132,6 +138,12 @@ class VentanaPrincipal(QMainWindow):
         self._installer.cambiar_instalacion(instalacion)
         self._scanner.cambiar_instalacion(instalacion)
         self._actualizar_ruta()
+
+    def closeEvent(self, evento: QCloseEvent) -> None:  # noqa: N802 (API de Qt)
+        # Salir con un QThread corriendo termina en un volcado.
+        self._panel_actualizaciones.parar()
+        self._panel_explorar.parar()
+        super().closeEvent(evento)
 
     # ── Arrastrar y soltar ────────────────────────────────────────────────────
 

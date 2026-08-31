@@ -16,3 +16,4 @@
 | [0016](0016-contenido-de-la-tienda.md) | El contenido de la tienda se detecta y no se toca | Aceptada |
 | [0017](0017-emparejar-con-los-catalogos.md) | Emparejar lo instalado con lo publicado, confirmando por uuid | Aceptada |
 | [0018](0018-leer-manifiestos-remotos.md) | Leer el manifiesto publicado sin descargar el pack | Aceptada |
+| [0019](0019-trabajos-en-segundo-plano.md) | Trabajadores persistentes para lo que toca la red | Aceptada |
