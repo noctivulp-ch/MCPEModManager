@@ -146,6 +146,7 @@ class Installer:
             or instalados.get(clave_de_pack(componente.nombre))
         )
         destino = self._destino(componente, anterior)
+        self._retirar_forma_anterior(anterior, destino, analisis.ruta)
 
         if destino.exists():
             shutil.rmtree(destino) if destino.is_dir() else destino.unlink()
@@ -182,6 +183,27 @@ class Installer:
 
         carpeta = self._carpeta_de(componente.categoria)
         return _sin_colision(carpeta / nombre_de_carpeta(componente.nombre))
+
+    def _retirar_forma_anterior(
+        self, anterior: Instalado | None, destino: Path, origen: Path
+    ) -> None:
+        """Quita la versión anterior cuando no está en la carpeta que se reusa.
+
+        Pasa al actualizar un pack que estaba **sin extraer**: lo viejo es un
+        archivo `.mcpack` y lo nuevo una carpeta, así que no se sobrescribe solo.
+        Sin esto quedan los dos, con el mismo uuid, y el juego ve el pack dos
+        veces — que es justo lo que este gestor existe para evitar.
+        """
+        if anterior is None or anterior.ruta == destino:
+            return
+        # El archivo que se está instalando no se toca, aunque sea el anterior.
+        if anterior.ruta.resolve() == origen.resolve():
+            return
+
+        if anterior.ruta.is_file():
+            anterior.ruta.unlink(missing_ok=True)
+        elif anterior.ruta.is_dir():
+            shutil.rmtree(anterior.ruta, ignore_errors=True)
 
     def _carpeta_de(self, categoria: Categoria) -> Path:
         i = self._instalacion

@@ -289,3 +289,48 @@ def test_si_lo_descargado_no_trae_ese_pack_se_dice(installer, tmp_path):
     ruta = pack(tmp_path / "otro.mcpack", nombre="Otra cosa", uuid="u-9")
     with pytest.raises(ErrorInstalacion, match="no contiene el pack"):
         installer.instalar(analizar(ruta), {}, solo={"elquequeria"})
+
+
+def test_actualizar_un_pack_sin_extraer_retira_el_archivo_viejo(installer, instalacion,
+                                                                tmp_path):
+    """El caso que se coló en una prueba real, con «Realistic Rain Graphics».
+
+    Lo instalado era un `.mcpack` sin extraer y lo nuevo es una carpeta, así que
+    no se sobrescriben solos: quedaban los dos con el mismo uuid y el juego veía
+    el pack dos veces.
+    """
+    suelto = instalacion.resource_packs / "Realistic Rain pack v3.1.mcpack"
+    pack(tmp_path / "viejo.mcpack", nombre="Realistic Rain Graphics", uuid="u-lluvia",
+         version=(3, 1, 0))
+    suelto.write_bytes((tmp_path / "viejo.mcpack").read_bytes())
+
+    previo = Instalado(uuid="u-lluvia", nombre="Realistic Rain Graphics",
+                       version="3.1.0", categoria=Categoria.RECURSO,
+                       ruta=suelto, forma=Forma.EMPAQUETADO)
+
+    _instalar(installer,
+              pack(tmp_path / "nuevo.mcpack", nombre="Realistic Rain Graphics v3.9",
+                   uuid="u-lluvia", version=(3, 9, 0)),
+              {previo.uuid: previo, previo.clave: previo})
+
+    quedan = sorted(p.name for p in instalacion.resource_packs.iterdir())
+    assert quedan == ["RealisticR"]
+    assert not suelto.exists()
+
+
+def test_actualizar_no_borra_el_archivo_que_se_esta_instalando(installer, instalacion,
+                                                               tmp_path):
+    """Extraer un pack usa su propio archivo como origen: no puede desaparecer
+    a mitad de la operación."""
+    suelto = instalacion.resource_packs / "Suelto.mcpack"
+    pack(tmp_path / "tmp.mcpack", nombre="Suelto", uuid="u-1")
+    suelto.write_bytes((tmp_path / "tmp.mcpack").read_bytes())
+
+    previo = Instalado(uuid="u-1", nombre="Suelto", version="1.0.0",
+                       categoria=Categoria.RECURSO, ruta=suelto,
+                       forma=Forma.EMPAQUETADO)
+
+    # El origen es el propio archivo suelto, como en «Extraer».
+    installer.instalar(analizar(suelto), {previo.uuid: previo})
+    assert suelto.exists()
+    assert (instalacion.resource_packs / "Suelto").is_dir()
