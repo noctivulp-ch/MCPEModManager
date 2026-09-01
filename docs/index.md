@@ -36,5 +36,7 @@ real:
 | `fish check.sh` | Sintaxis, importaciones, pyflakes, pruebas y arranque real de la UI |
 | `fish build.sh` | Compila con Nuitka y comprueba que el binario arranca |
 | `scripts/auditar_instalacion.py` | Audita las instalaciones reales, en solo lectura |
+| `scripts/respaldo.py` | Copia de seguridad de lo que el gestor puede tocar, con inventario comparable |
+| `mcpemod --diagnostico` | Instalaciones, contenido, caché y estado de la red |
 | `scripts/captura_ui.py` | Captura la ventana en un PNG, sin pantalla |
 | `scripts/repro_nuitka_pyside_connect.py` | Repro del fallo de Nuitka que documenta la ADR 0008 |
