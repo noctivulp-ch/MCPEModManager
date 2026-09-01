@@ -56,6 +56,17 @@ VIGENCIA = timedelta(hours=12)
 #: que no están en ningún catálogo son muchos y no van a aparecer mañana.
 REINTENTO_FALLIDO = timedelta(days=7)
 
+#: Con qué versión de esta lógica se pobló la caché. **Súbela al cambiar cómo se
+#: empareja**, o lo guardado por la versión anterior seguirá mandando: un
+#: emparejamiento equivocado no caduca por sí solo, y su vigencia impide incluso
+#: que se vuelva a mirar.
+#:
+#: 2 — el uuid manda sobre el nombre, y se miran varios archivos de la
+#:     publicación en vez de solo el más reciente.
+VERSION_EMPAREJAMIENTO = 2
+
+_CLAVE_VERSION = "version_emparejamiento"
+
 
 class Confianza(Enum):
     """Cuánto se sabe de que la publicación encontrada es el pack instalado."""
@@ -157,9 +168,30 @@ class Buscador:
     def __init__(self, store: Store, fuentes: list[Fuente]) -> None:
         self._store = store
         self._fuentes = fuentes
+        #: Si esta instancia tuvo que tirar lo emparejado por una versión
+        #: anterior. La interfaz lo dice, para que la lista vacía no parezca una
+        #: pérdida sin explicación.
+        self.cache_descartada = self._descartar_cache_obsoleta()
 
-    def pendientes(self, piezas: list[Instalado]) -> list[Instalado]:
+    def _descartar_cache_obsoleta(self) -> bool:
+        """Tira lo emparejado por una versión anterior de esta lógica.
+
+        Sin esto, un emparejamiento equivocado sobrevive a su propio arreglo: la
+        caché lo da por bueno y su vigencia impide que se vuelva a mirar. Pasó
+        con dos packs hermanos del mismo nombre, donde el arreglo no tuvo efecto
+        hasta descartar lo guardado.
+        """
+        actual = str(VERSION_EMPAREJAMIENTO)
+        if self._store.ajuste(_CLAVE_VERSION) == actual:
+            return False
+        self._store.olvidar_emparejamientos()
+        self._store.guardar_ajuste(_CLAVE_VERSION, actual)
+        return True
+
+    def pendientes(self, piezas: list[Instalado], forzar: bool = False) -> list[Instalado]:
         """Los packs a los que toca mirar, en orden de utilidad.
+
+        Con `forzar`, todos los que se puedan comprobar, ignorando la vigencia.
 
         Se descarta lo que el gestor no puede actualizar de todas formas: lo de
         la tienda lo lleva el juego, y sin uuid o sin versión no hay nada que
@@ -173,7 +205,7 @@ class Buscador:
             if not pieza.gestionable or not pieza.uuid or not pieza.version:
                 continue
             guardado = cache.get(pieza.uuid)
-            if guardado is None:
+            if guardado is None or forzar:
                 listos.append(pieza)
                 continue
             espera = VIGENCIA if guardado["encontrado"] else REINTENTO_FALLIDO

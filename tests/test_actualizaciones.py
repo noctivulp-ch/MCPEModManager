@@ -373,3 +373,43 @@ def test_sin_url_declarada_manda_el_autor(remoto):
         _publicacion(titulo="Bonito", autor="Alguien", id="p-suyo"),
     ]
     assert _ordenar(candidatos, pieza)[0].id == "p-suyo"
+
+
+# --- caché de una versión anterior de esta lógica ---
+
+def test_la_cache_de_una_version_anterior_se_descarta(store, remoto):
+    """Un emparejamiento equivocado no caduca solo: la caché lo da por bueno y su
+    vigencia impide incluso volver a mirarlo. Pasó de verdad — el arreglo de dos
+    packs hermanos no tuvo efecto hasta tirar lo guardado.
+    """
+    from mcpemod.core.actualizaciones import VERSION_EMPAREJAMIENTO, _CLAVE_VERSION
+
+    store.guardar_ajuste(_CLAVE_VERSION, str(VERSION_EMPAREJAMIENTO - 1))
+    store.guardar_emparejamiento("u-1", encontrado=True, titulo="Viejo")
+
+    buscador = Buscador(store, [FuenteFalsa()])
+    assert buscador.cache_descartada is True
+    assert store.emparejamientos() == {}
+
+
+def test_una_cache_al_dia_no_se_toca(store, remoto):
+    from mcpemod.core.actualizaciones import VERSION_EMPAREJAMIENTO, _CLAVE_VERSION
+
+    store.guardar_ajuste(_CLAVE_VERSION, str(VERSION_EMPAREJAMIENTO))
+    store.guardar_emparejamiento("u-1", encontrado=True, titulo="Bueno")
+
+    buscador = Buscador(store, [FuenteFalsa()])
+    assert buscador.cache_descartada is False
+    assert "u-1" in store.emparejamientos()
+
+
+def test_forzar_ignora_la_vigencia(store, remoto):
+    """«Volver a comprobar» sirve para eso: preguntar aunque sea reciente."""
+    remoto["por_url"]["https://cdn/a.mcpack"] = _manifiesto("u-1")
+    fuente = FuenteFalsa({"Bonito": [_publicacion()]})
+    pieza = _instalado(uuid="u-1")
+    b = Buscador(store, [fuente])
+    b.comprobar(pieza)
+
+    assert b.pendientes([pieza]) == []
+    assert b.pendientes([pieza], forzar=True) == [pieza]

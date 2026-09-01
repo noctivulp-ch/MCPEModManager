@@ -78,6 +78,13 @@ class PanelActualizaciones(PanelLista):
         conectar(self._btn_comprobar.clicked, self._comprobar)
         fila.addWidget(self._btn_comprobar)
 
+        self._btn_revisar = boton("Volver a comprobar")
+        self._btn_revisar.setToolTip(
+            "Vuelve a preguntar por todos, sin esperar a que caduque lo comprobado."
+        )
+        conectar(self._btn_revisar.clicked, lambda: self._comprobar(forzar=True))
+        fila.addWidget(self._btn_revisar)
+
         self._btn_todo = boton("Actualizar todo")
         self._btn_todo.hide()
         conectar(self._btn_todo.clicked, self._actualizar_todo)
@@ -108,12 +115,12 @@ class PanelActualizaciones(PanelLista):
         """Corta el trabajo en curso. Se llama al cerrar la ventana."""
         self._tarea.parar()
 
-    def _comprobar(self) -> None:
+    def _comprobar(self, forzar: bool = False) -> None:
         if self._tarea.corriendo:
             return
 
         buscador = self._buscador()
-        pendientes = buscador.pendientes(self._scanner.leer_instalados())
+        pendientes = buscador.pendientes(self._scanner.leer_instalados(), forzar=forzar)
         if not pendientes:
             self._lbl_estado.setText("Todo comprobado hace poco. Nada que preguntar.")
             return
@@ -173,6 +180,7 @@ class PanelActualizaciones(PanelLista):
         self._progreso.hide()
         self._btn_cancelar.hide()
         self._btn_comprobar.show()
+        self._btn_revisar.show()
 
         if error:
             self._lbl_estado.setText(f"Se cortó: {error}")
@@ -193,10 +201,16 @@ class PanelActualizaciones(PanelLista):
 
     def _recargar_desde_cache(self) -> None:
         piezas = self._scanner.leer_instalados()
-        self._resultados = {
-            r.pieza.uuid: r for r in self._buscador().desde_cache(piezas)
-        }
-        if self._resultados:
+        buscador = self._buscador()
+        self._resultados = {r.pieza.uuid: r for r in buscador.desde_cache(piezas)}
+
+        if buscador.cache_descartada:
+            # Que una lista vacía tras actualizar la app no parezca una pérdida.
+            self._lbl_estado.setText(
+                "Se descartó lo comprobado antes porque cambió cómo se emparejan "
+                "los packs. Pulsa «Comprobar»."
+            )
+        elif self._resultados:
             self._lbl_estado.setText(self._resumen(len(self._resultados)))
         self._repoblar()
 
@@ -215,6 +229,7 @@ class PanelActualizaciones(PanelLista):
 
         self._fallos = []
         self._btn_comprobar.hide()
+        self._btn_revisar.hide()
         self._btn_todo.hide()
         self._btn_cancelar.show()
         self._progreso.setRange(0, len(pendientes))
@@ -233,6 +248,7 @@ class PanelActualizaciones(PanelLista):
         self._progreso.hide()
         self._btn_cancelar.hide()
         self._btn_comprobar.show()
+        self._btn_revisar.show()
 
         partes = [f"{instalados} actualizados"]
         if fallidos:

@@ -7,7 +7,9 @@ from PySide6.QtWidgets import (
     QComboBox, QHBoxLayout, QLabel, QMainWindow, QTabWidget, QWidget,
 )
 
-from wulf_qt import GAP_CELDA, Bandeja, Pozo, boton_plano, mostrar_aviso
+from wulf_qt import (
+    GAP_CELDA, Bandeja, Pozo, boton_plano, mostrar_aviso, quitar_linea_de_pestanas,
+)
 
 from mcpemod.core import Instalacion, Installer, Scanner, Store
 from mcpemod.senales import conectar
@@ -73,14 +75,11 @@ class VentanaPrincipal(QMainWindow):
 
         self._tabs = QTabWidget()
         self._tabs.setDocumentMode(True)
-        # Qt dibuja bajo la fila de pestañas una «línea base» de un píxel con el
-        # color de realce del sistema —azul—, que no es de esta paleta. Se ve
-        # cruzando de lado a lado con un hueco bajo la pestaña activa.
-        # `wulf_qt` no estiliza `QTabWidget`, así que se apaga aquí.
-        self._tabs.tabBar().setDrawBase(False)
+        # La línea que Qt pinta bajo las pestañas con el realce del escritorio
+        # la apaga la propia librería; el borde del panel sí sale de la hoja.
+        quitar_linea_de_pestanas(self._tabs)
         self._tabs.setStyleSheet(
             "QTabWidget::pane { border: 0; background: transparent; }"
-            "QTabBar { border: 0; }"
             "QTabBar::tab { background: transparent; }"
         )
         self._tabs.addTab(self._panel_instalados, "Instalado")
