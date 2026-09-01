@@ -51,17 +51,20 @@ class Installer:
         que responde por uuid y por clave de nombre — es lo que permite reconocer
         que esto es una versión nueva de algo que ya está.
 
-        `solo` limita qué piezas se instalan, por clave de pack. Hace falta al
-        actualizar: un pack puede estar publicado **dentro de un addon** que trae
-        además otras cosas, y actualizarlo no debe instalar de propina lo que
-        nadie pidió.
+        `solo` limita qué piezas se instalan. Acepta **uuid o clave de nombre**,
+        las dos señales con las que se reconoce un pack, porque el emparejamiento
+        pudo hacerse por cualquiera de ellas: al actualizar un pack cuyo autor le
+        cambió el nombre, la clave no coincide y el uuid sí.
+
+        Hace falta porque un pack puede estar publicado **dentro de un addon** con
+        más cosas, y actualizarlo no debe instalar de propina lo que nadie pidió.
         """
         if not analisis.componentes:
             raise ErrorInstalacion(f"{analisis.ruta.name} no contiene nada instalable")
 
         elegidos = [
             c for c in analisis.componentes
-            if solo is None or clave_de_pack(c.nombre) in solo
+            if solo is None or c.uuid in solo or clave_de_pack(c.nombre) in solo
         ]
         if not elegidos:
             raise ErrorInstalacion(

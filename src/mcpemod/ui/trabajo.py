@@ -122,7 +122,12 @@ def instalar_publicado(
                     raise ErrorInstalacion("lo descargado no es contenido instalable")
                 # Solo el pack que se estaba actualizando: lo publicado puede ser
                 # un addon con más cosas dentro, y no se instala lo que nadie pidió.
-                installer.instalar(analisis, indice_por_pack, solo={resultado.pieza.clave})
+                # Las dos señales: el emparejamiento pudo confirmarse por
+                # cualquiera, y el autor puede haber cambiado el nombre.
+                installer.instalar(
+                    analisis, indice_por_pack,
+                    solo={resultado.pieza.clave, resultado.pieza.uuid},
+                )
         except Exception as e:  # noqa: BLE001 - uno que falle no para los demás
             fallidos.append(resultado.pieza.nombre)
             emitir("fallo", resultado.pieza.nombre, str(e))

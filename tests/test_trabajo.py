@@ -278,7 +278,11 @@ def test_cancelar_a_medias_deja_lo_ya_hecho(qt_app, sin_red):
 
 
 def test_al_actualizar_se_pide_solo_ese_pack(qt_app, sin_red):
-    """Lo publicado puede ser un addon con más cosas dentro."""
+    """Lo publicado puede ser un addon con más cosas dentro.
+
+    Se piden las dos señales —clave de nombre y uuid— porque el emparejamiento
+    pudo confirmarse por cualquiera de ellas.
+    """
     from mcpemod.ui.trabajo import instalar_publicado
 
     installer = _InstallerFalso()
@@ -295,4 +299,4 @@ def test_al_actualizar_se_pide_solo_ese_pack(qt_app, sin_red):
     tarea.parar()
 
     (_, solo), = installer.instalados
-    assert solo == {resultado.pieza.clave}
+    assert solo == {resultado.pieza.clave, resultado.pieza.uuid}

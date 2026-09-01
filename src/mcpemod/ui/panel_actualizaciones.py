@@ -271,7 +271,8 @@ class PanelActualizaciones(PanelLista):
                                  "no es contenido instalable")
                     return
                 self._installer.instalar(
-                    analisis, self._scanner.indice(), solo={resultado.pieza.clave}
+                    analisis, self._scanner.indice(),
+                    solo={resultado.pieza.clave, resultado.pieza.uuid},
                 )
         except (ErrorRed, ErrorInstalacion, OSError) as e:
             self._avisar(str(e))

@@ -334,3 +334,19 @@ def test_actualizar_no_borra_el_archivo_que_se_esta_instalando(installer, instal
     installer.instalar(analizar(suelto), {previo.uuid: previo})
     assert suelto.exists()
     assert (instalacion.resource_packs / "Suelto").is_dir()
+
+
+def test_al_actualizar_vale_el_uuid_si_el_nombre_cambio(installer, instalacion, tmp_path):
+    """Un autor puede cambiar el nombre del pack entre versiones.
+
+    Se vio en un ensayo sobre la instalación real: «BP | Fabulous Furnished» se
+    publica como «Fabulous Furniture | v2.2.16 - With biomes». El emparejamiento
+    lo había confirmado por uuid, pero el filtro de instalación miraba solo el
+    nombre y rechazaba lo que acababa de descargar.
+    """
+    ruta = pack(tmp_path / "nuevo.mcpack", nombre="Fabulous Furniture - With biomes",
+                uuid="u-mismo", version=(2, 2, 16))
+
+    installer.instalar(analizar(ruta), {}, solo={"bpfabulousfurnished", "u-mismo"})
+
+    assert [p.name for p in instalacion.resource_packs.iterdir()] == ["FabulousFu"]
