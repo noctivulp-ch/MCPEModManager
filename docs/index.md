@@ -17,6 +17,8 @@ real:
 
 ## Funciones
 
+- [Activación de packs](funciones/activacion-de-packs.md) — cómo decide el juego
+  qué se aplica, global y por mundo, y por qué los mundos se desfasan
 - [Gestión de contenido](funciones/gestion-contenido.md) — reconocer, instalar,
   actualizar desde los catálogos, desinstalar, versiones, historial
 

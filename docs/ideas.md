@@ -31,9 +31,14 @@ que la app puede hacer.
 **Perfiles.** Conjuntos de packs activos con nombre: «Vanilla+», «PvP», «el
 mundo de los niños». Depende de lo anterior.
 
-**Gestión por mundo.** Cada mundo guarda su propia copia de los packs que usa.
-Ver qué packs tiene un mundo, y sincronizarlos con la versión global, es una
-vista que hoy no existe y el disco ya soporta.
+**Gestión por mundo.** Es lo que más valor tiene ahora mismo, y está medido: tras
+actualizar 35 packs, los dos mundos del equipo de prueba quedaron con **15
+desfasados cada uno**, porque un mundo usa su copia interna y no el pack global.
+
+Es además el terreno más acotado de todos: un mundo declara exactamente qué usa
+en su `world_*_packs.json`, así que se puede comprobar qué le falta y qué tiene
+viejo sin adivinar nada. Actualizar uno es copiar el pack a su carpeta y subir la
+versión en ese JSON. Ver [Activación de packs](funciones/activacion-de-packs.md).
 
 **Dependencias.** Un behavior pack declara en `dependencies` el uuid de su
 resource pack. Se leen y no se usan: se podría avisar al desinstalar algo de lo

@@ -65,8 +65,13 @@ porque instala directamente en la carpeta.
    donde el gestor puede hacerlo mejor que el juego: reconocerlos y reemplazar en
    vez de acumular.
 
-Sobre el nombrado de carpetas la documentación no dice nada, así que se conserva
-lo observado: el juego deriva la carpeta del nombre del pack —quitando los
+Sobre el nombrado de carpetas hay una razón documentada, encontrada después: los
+nombres de carpeta de packs dentro de un mundo o plantilla **deben tener diez
+caracteres o menos**, por una limitación de longitud de rutas en Xbox que impide
+cargarlos —[Create a World Template from an Exported
+World](https://learn.microsoft.com/en-us/minecraft/creator/documents/packagingaworldtemplate)—.
+El recorte que se había deducido observando las carpetas resulta ser un requisito.
+Se conserva lo observado sobre cómo se aplica: el juego deriva la carpeta del nombre del pack —quitando los
 códigos `§`, las barras verticales y los espacios, y recortando a diez
 caracteres—. Comprobado contra las 43 carpetas de la instalación de prueba,
 **acierta en 42**. Replicarlo no cuesta nada y mantiene una sola carpeta por pack
