@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from PySide6.QtGui import QCloseEvent, QDragEnterEvent, QDragLeaveEvent, QDropEvent
+from PySide6.QtGui import (
+    QCloseEvent, QDragEnterEvent, QDragLeaveEvent, QDropEvent, QKeySequence, QShortcut,
+)
 from PySide6.QtWidgets import (
     QComboBox, QHBoxLayout, QLabel, QMainWindow, QTabWidget, QWidget,
 )
@@ -15,6 +17,7 @@ from mcpemod.core import Instalacion, Installer, Scanner, Store
 from mcpemod.senales import conectar
 from mcpemod.ui import soltar
 from mcpemod.ui.dialogo_ajustes import dialogo_ajustes
+from mcpemod.ui.panel_activacion import PanelActivacion
 from mcpemod.ui.panel_actualizaciones import PanelActualizaciones
 from mcpemod.ui.panel_descargas import PanelDescargas
 from mcpemod.ui.panel_explorar import PanelExplorar
@@ -26,8 +29,8 @@ _TITULO = "MCPE Mod Manager"
 _ANCHO_MIN = 820
 _ALTO_MIN = 560
 
-_TAB_CARPETAS = 1
-_TAB_HISTORIAL = 4
+_TAB_CARPETAS = 2
+_TAB_HISTORIAL = 5
 
 
 class VentanaPrincipal(QMainWindow):
@@ -48,6 +51,7 @@ class VentanaPrincipal(QMainWindow):
 
         self._velo = VeloSoltar(self)
         self.setAcceptDrops(True)
+        self._atajos_de_activacion()
 
     def _construir(self) -> None:
         self.setWindowTitle(_TITULO)
@@ -67,6 +71,7 @@ class VentanaPrincipal(QMainWindow):
 
         self._panel_instalados = PanelInstalados(self._scanner, self._installer)
         self._panel_descargas = PanelDescargas(self._scanner, self._installer)
+        self._panel_activacion = PanelActivacion(self._scanner, self._installer)
         self._panel_actualizaciones = PanelActualizaciones(
             self._store, self._scanner, self._installer
         )
@@ -83,6 +88,7 @@ class VentanaPrincipal(QMainWindow):
             "QTabBar::tab { background: transparent; }"
         )
         self._tabs.addTab(self._panel_instalados, "Instalado")
+        self._tabs.addTab(self._panel_activacion, "Activación")
         self._tabs.addTab(self._panel_descargas, "Carpetas")
         self._tabs.addTab(self._panel_actualizaciones, "Actualizaciones")
         self._tabs.addTab(self._panel_explorar, "Explorar")
@@ -147,6 +153,19 @@ class VentanaPrincipal(QMainWindow):
         self._installer.cambiar_instalacion(instalacion)
         self._scanner.cambiar_instalacion(instalacion)
         self._actualizar_ruta()
+
+    def _atajos_de_activacion(self) -> None:
+        """Copiar y pegar packs entre las columnas de activación.
+
+        Van en la ventana y no en el panel para que respondan aunque el foco esté
+        en cualquier parte; el panel decide si tiene algo que copiar.
+        """
+        for secuencia, accion in (
+            (QKeySequence.StandardKey.Copy, self._panel_activacion.copiar_seleccion),
+            (QKeySequence.StandardKey.Paste, self._panel_activacion.pegar),
+        ):
+            atajo = QShortcut(secuencia, self)
+            conectar(atajo.activated, accion)
 
     def closeEvent(self, evento: QCloseEvent) -> None:  # noqa: N802 (API de Qt)
         # Salir con un QThread corriendo termina en un volcado.

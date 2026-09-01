@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QWidget
 from mcpemod.core import ErrorInstalacion, Installer, Instalado, Scanner
 from mcpemod.senales import conectar
 from mcpemod.ui.panel_lista import PanelLista
-from mcpemod.ui.widgets import TarjetaInstalado
+from mcpemod.ui.widgets import TarjetaInstalado, agrupar, cabecera
 
 
 class PanelInstalados(PanelLista):
@@ -24,13 +24,20 @@ class PanelInstalados(PanelLista):
         self.recargar()
 
     def recargar(self) -> None:
-        tarjetas = []
-        for pieza in self._scanner.leer_instalados():
-            tarjeta = TarjetaInstalado(pieza)
-            conectar(tarjeta.desinstalar_pedido, self._desinstalar)
-            conectar(tarjeta.normalizar_pedido, self._normalizar)
-            tarjetas.append(tarjeta)
-        self._poner(tarjetas)
+        """Un solo panel, agrupado por tipo y alfabético dentro de cada grupo."""
+        widgets = []
+        for categoria, piezas in agrupar(
+            self._scanner.leer_instalados(),
+            categoria_de=lambda p: p.categoria,
+            nombre_de=lambda p: p.nombre,
+        ):
+            widgets.append(cabecera(categoria, len(piezas)))
+            for pieza in piezas:
+                tarjeta = TarjetaInstalado(pieza)
+                conectar(tarjeta.desinstalar_pedido, self._desinstalar)
+                conectar(tarjeta.normalizar_pedido, self._normalizar)
+                widgets.append(tarjeta)
+        self._poner(widgets)
 
     def _desinstalar(self, pieza: Instalado) -> None:
         try:

@@ -14,6 +14,7 @@ LACA = LACAS[MODO]
 
 SOBRE_BANDEJA = LACA.bandeja
 SOBRE_POZO = LACA.pozo
+TEXTO_EN_POZO = LACA.texto_en_pozo
 TEXTO_SECUNDARIO = LACA.texto_secundario_en_pozo
 TEXTO_ATENUADO = LACA.texto_atenuado_en_bandeja
 

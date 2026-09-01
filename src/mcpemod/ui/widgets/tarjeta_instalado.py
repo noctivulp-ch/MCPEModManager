@@ -9,9 +9,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 from wulf_qt import GAP_CELDA, Pozo, Tallado, boton, boton_primario
 
 from mcpemod.core import Instalado
-from mcpemod.ui.estilo import (
-    AMBAR, COLOR_CATEGORIA, GRIS, SOBRE_POZO, TEXTO_SECUNDARIO, VIOLETA,
-)
+from mcpemod.ui.estilo import AMBAR, SOBRE_POZO, TEXTO_SECUNDARIO, VIOLETA
 from mcpemod.ui.widgets.badge import badge
 
 
@@ -50,8 +48,8 @@ class TarjetaInstalado(QWidget):
         nombre.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         fila.addWidget(nombre)
 
-        categoria = self._pieza.categoria
-        fila.addWidget(badge(categoria.etiqueta, COLOR_CATEGORIA.get(categoria.value, GRIS)))
+        # El tipo lo dice el título del grupo; repetirlo en cada tarjeta con un
+        # color propio era ruido, y esos colores no salían de la laca.
         # La forma no es un problema: el juego admite las tres. Se señala porque
         # solo la de carpeta permite actualizar y desinstalar como el resto.
         if self._pieza.de_la_tienda:

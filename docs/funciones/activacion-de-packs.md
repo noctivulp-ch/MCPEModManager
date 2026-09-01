@@ -114,21 +114,42 @@ Es la explicación del nombrado que el gestor replica
 había deducido observando las carpetas, y resulta que tiene una razón documentada.
 Las 25 carpetas de packs de los mundos del equipo de prueba lo cumplen.
 
-## Qué haría falta para gestionar la activación
+## Cómo lo hace el gestor
 
-Nada de esto está hecho. Lo que costaría, por si se retoma:
+La pestaña **Activación** lista los ámbitos —el juego entero y cada mundo— y al
+entrar en uno muestra **dos columnas**: lo disponible a la izquierda, lo aplicado
+a la derecha.
 
-| Para | Habría que |
+La de disponibles va agrupada por tipo y alfabética dentro de cada grupo. **La de
+aplicados va en el orden del juego**, que es lo que decide cuál gana: el de abajo
+se aplica después.
+
+Un pack se mueve de tres maneras, y las tres hacen lo mismo:
+
+| | |
 |---|---|
-| Activar/desactivar global | Escribir en `global_resource_packs.json`, respetando el orden |
-| Activar/desactivar por mundo | Escribir en los `world_*_packs.json` del mundo |
-| Elegir variante | Poner `subpack` en la entrada |
-| Actualizar los packs de un mundo | Copiar a su carpeta interna **y** subir la versión en su JSON |
-| Avisar de lo que falta | Comparar `world_*_packs.json` con las copias del mundo y con `_history` |
+| **Arrastrar por el asa** (`≡`) | A la otra columna para activar o quitar; dentro de la de aplicados, para cambiar el orden. El asa es una zona pequeña a propósito: agarrar por cualquier parte de la fila haría imposible desplazar la lista con el ratón |
+| **Botones** | `Activar`, `Quitar`, `Subir`, `Bajar` |
+| **`Ctrl+C` / `Ctrl+V`** | Copia el pack bajo el puntero y lo pega en la columna y el hueco donde esté el ratón |
 
-El riesgo a tener presente: un `pack_id` o una `version` que no cuadren con el
-manifiesto hacen que el pack no cargue, y el juego no dice por qué. Cualquier
-escritura en estos archivos debería ir precedida de una copia del original.
+Al soltar, el hueco se decide por **el centro de cada fila**: en la mitad de
+arriba se coloca antes, en la de abajo después.
+
+### Lo que no se puede activar, y por qué
+
+El gestor lo comprueba **antes de escribir**, porque un `pack_id` o una `version`
+que no cuadren hacen que el pack no cargue y el juego no dice por qué.
+
+- Lo que está **sin extraer**: no hay carpeta que copiar ni versión que anotar.
+- Lo de la **tienda**: lo gestiona el juego.
+- Lo que no declara uuid o versión.
+- Packs de **comportamiento en el ámbito global**: no existe esa activación, y la
+  columna lo dice en vez de dejar un hueco sin explicar.
+
+### Escritura sin dejar nada a medias
+
+Los archivos de activación se escriben en un temporal al lado y se sustituyen de
+golpe. Un archivo truncado aquí deja al mundo sin sus packs.
 
 
 ## Respaldo de mundos

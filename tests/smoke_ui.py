@@ -70,6 +70,7 @@ def _preparar(raiz: Path) -> tuple[Instalacion, Path]:
     mundo.mkdir()
     (mundo / "level.dat").write_bytes(b"nivel")
     (mundo / "levelname.txt").write_text("Mi mundo")
+    (inst.com_mojang / "minecraftpe").mkdir(parents=True, exist_ok=True)
 
     descargas = raiz / "Descargas"
     _pack(descargas / "Bonito v2.mcpack", "Bonito", "uuid-bonito", version=(2, 0, 0))
@@ -107,6 +108,26 @@ def _sembrar_actualizacion(store) -> None:
         version_remota="3.0.0", url_descarga="https://ejemplo/q.mcpack",
         nombre_archivo="q.mcpack",
     )
+
+
+def _probar_activacion(app, ventana, instalacion) -> None:
+    """Entra en los dos ámbitos: son ramas distintas de la misma vista."""
+    from mcpemod.core.activacion import Global, mundos_de
+
+    panel = ventana._panel_activacion
+    panel.recargar()
+    app.processEvents()
+
+    panel._entrar(Global(instalacion))
+    app.processEvents()
+    assert not panel._btn_respaldar.isVisible(), "lo global no se respalda"
+
+    mundos = mundos_de(instalacion)
+    assert mundos, "el smoke necesita un mundo para probar esa rama"
+    panel._entrar(mundos[0])
+    app.processEvents()
+    panel._salir()
+    app.processEvents()
 
 
 def _probar_arrastre(app, ventana, raiz: Path) -> None:
@@ -176,6 +197,7 @@ def main() -> int:
             app.processEvents()
 
         _probar_arrastre(app, ventana, raiz)
+        _probar_activacion(app, ventana, instalacion)
 
         assert store.historial(), "el historial quedó vacío"
 
