@@ -5,6 +5,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from wulf_qt import GAP_CELDA, PARED, Pozo, boton, boton_primario, barra_progreso
@@ -26,6 +27,11 @@ _VACIO = (
     "Pulsa «Comprobar» para preguntar a los catálogos por tus packs."
 )
 
+#: Cada cuánto se rehace la lista mientras entran resultados. Rehacerla en cada
+#: uno son cuarenta repintados seguidos, y se ven como un parpadeo; agrupándolos
+#: la lista sigue llenándose a la vista pero de tres en tres.
+_REFRESCO_MS = 350
+
 
 class PanelActualizaciones(PanelLista):
     def __init__(
@@ -42,6 +48,11 @@ class PanelActualizaciones(PanelLista):
         self._resultados: dict[str, Resultado] = {}
         self._fallos: list[str] = []
         self._tarea = Tarea(self)
+
+        self._refresco = QTimer(self)
+        self._refresco.setSingleShot(True)
+        self._refresco.setInterval(_REFRESCO_MS)
+        conectar(self._refresco.timeout, self._repoblar)
 
         self._cabecera(self._barra())
         conectar(scanner.instalados_cambiados, self._recargar_desde_cache)
@@ -138,6 +149,8 @@ class PanelActualizaciones(PanelLista):
             self._progreso.setValue(hechos)
             self._lbl_estado.setText(f"Actualizando {hechos + 1} de {total}:  {nombre}")
         elif clase == "instalado":
+            # La tarjeta se quita al terminar, no en mitad: retirarla ahora
+            # movería bajo el cursor las que vienen detrás.
             self._resultados.pop(datos[0], None)
         elif clase == "fallo":
             self._fallos.append(f"{datos[0]}: {datos[1]}")
@@ -152,7 +165,9 @@ class PanelActualizaciones(PanelLista):
 
     def _al_encontrar(self, resultado: Resultado) -> None:
         self._resultados[resultado.pieza.uuid] = resultado
-        self._repoblar()
+        # Se agrupa: durante un barrido llegan de a ráfagas.
+        if not self._refresco.isActive():
+            self._refresco.start()
 
     def _al_terminar(self, comprobados: int, error: str) -> None:
         self._progreso.hide()
@@ -230,6 +245,7 @@ class PanelActualizaciones(PanelLista):
         self._repoblar()
 
     def _repoblar(self) -> None:
+        self._refresco.stop()
         # Primero lo accionable, y dentro de eso lo confirmado: una lista donde
         # hay que buscar la actualización entre cincuenta «al día» no sirve.
         ordenados = sorted(

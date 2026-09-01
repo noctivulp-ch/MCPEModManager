@@ -37,6 +37,12 @@ from .zip_remoto import leer_manifiestos
 #: que la búsqueda no lo encontró, y mirar más solo multiplica el coste.
 MAX_CANDIDATOS = 3
 
+#: Cuántos archivos de una misma publicación se miran. Hay publicaciones que
+#: reparten el pack de recursos y el de comportamiento en archivos distintos y
+#: alternados; mirando solo el más reciente, uno de los dos se empareja con el
+#: archivo del otro por tener el mismo nombre.
+MAX_ARCHIVOS = 3
+
 #: Techo de manifiestos remotos leídos por pack, sumando todas sus consultas.
 #: Es lo que acota el peor caso: sin él, un pack cuyos candidatos son addons
 #: grandes se lleva varios minutos él solo, y con sesenta por delante eso no
@@ -61,6 +67,14 @@ class Confianza(Enum):
     #: Queda a criterio de quien mira.
     PROBABLE = "probable"
     NINGUNO = "ninguno"
+
+
+def _resultado(pieza, publicacion, descarga, manifiesto) -> Resultado:
+    return Resultado(
+        pieza=pieza, publicacion=publicacion, descarga=descarga,
+        version_remota=manifiesto.version, uuid_remoto=manifiesto.uuid,
+        confianza=Confianza.CONFIRMADO,
+    )
 
 
 def _es_el_mismo_pack(manifiesto, pieza: Instalado) -> bool:
@@ -272,23 +286,25 @@ class Buscador:
         Se miran todos los manifiestos del archivo porque un `.mcaddon` trae
         varios packs dentro y el instalado puede ser cualquiera de ellos.
 
-        Solo se mira el archivo más reciente: las versiones viejas que el
-        catálogo conserva llevan el mismo uuid, así que no aportan nada nuevo y
-        cada una cuesta otra lectura.
+        **El uuid manda sobre el nombre.** Dos packs hermanos —el de recursos y el
+        de comportamiento— suelen compartir `header.name`, así que quedarse con la
+        primera coincidencia de nombre empareja uno con el archivo del otro. Se
+        siguen mirando archivos hasta encontrar el del uuid correcto, y la
+        coincidencia por nombre solo se usa si ninguno lo tiene.
         """
-        descarga = publicacion.ultima
-        if descarga is None or (lecturas is not None and not lecturas.gastar()):
-            return None
+        por_nombre = None
 
-        for manifiesto in leer_manifiestos(descarga.url):
-            if not _es_el_mismo_pack(manifiesto, pieza):
-                continue
-            return Resultado(
-                pieza=pieza, publicacion=publicacion, descarga=descarga,
-                version_remota=manifiesto.version, uuid_remoto=manifiesto.uuid,
-                confianza=Confianza.CONFIRMADO,
-            )
-        return None
+        for descarga in publicacion.descargas[:MAX_ARCHIVOS]:
+            if lecturas is not None and not lecturas.gastar():
+                break
+
+            for manifiesto in leer_manifiestos(descarga.url):
+                if manifiesto.uuid and manifiesto.uuid == pieza.uuid:
+                    return _resultado(pieza, publicacion, descarga, manifiesto)
+                if por_nombre is None and clave_de_pack(manifiesto.nombre) == pieza.clave:
+                    por_nombre = (descarga, manifiesto)
+
+        return _resultado(pieza, publicacion, *por_nombre) if por_nombre else None
 
     def _guardar(self, pieza: Instalado, resultado: Resultado) -> None:
         self._store.guardar_emparejamiento(

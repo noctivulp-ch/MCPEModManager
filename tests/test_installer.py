@@ -350,3 +350,27 @@ def test_al_actualizar_vale_el_uuid_si_el_nombre_cambio(installer, instalacion, 
     installer.instalar(analizar(ruta), {}, solo={"bpfabulousfurnished", "u-mismo"})
 
     assert [p.name for p in instalacion.resource_packs.iterdir()] == ["FabulousFu"]
+
+
+def test_al_actualizar_manda_el_uuid_sobre_el_nombre(installer, instalacion, tmp_path):
+    """Dos packs hermanos suelen compartir `header.name`.
+
+    Es el caso de «Silk Touch Spawners», cuyo pack de recursos y de
+    comportamiento se llaman igual: eligiendo por nombre se instalaba el que no
+    era, encima del otro.
+    """
+    from conftest import escribir_zip, manifiesto
+    import json as _json
+
+    ruta = escribir_zip(tmp_path / "ambos.mcaddon", {
+        "rp/manifest.json": _json.dumps(
+            manifiesto(nombre="Silk Touch Spawners", uuid="uuid-rp", tipo="resources")),
+        "bp/manifest.json": _json.dumps(
+            manifiesto(nombre="Silk Touch Spawners", uuid="uuid-bp", tipo="data")),
+    })
+
+    # Se pide el de comportamiento, por uuid; el nombre coincide con los dos.
+    installer.instalar(analizar(ruta), {}, solo={"silktouchspawners", "uuid-bp"})
+
+    assert list(instalacion.resource_packs.iterdir()) == []
+    assert [p.name for p in instalacion.behavior_packs.iterdir()] == ["SilkTouchS"]

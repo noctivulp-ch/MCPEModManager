@@ -235,17 +235,52 @@ def test_no_pasa_del_presupuesto_de_lecturas(store, remoto):
     Buscador(store, [fuente]).comprobar(_instalado(nombre="Bonito Pack Grande", autores=()))
     assert len(remoto["llamadas"]) <= MAX_LECTURAS
 
-def test_solo_se_mira_el_archivo_mas_reciente(store, remoto):
-    """Las versiones viejas llevan el mismo uuid: no aportan y cada una cuesta."""
+def test_para_en_cuanto_encuentra_el_uuid(store, remoto):
+    """No se recorren los veinte archivos que guarda una publicación."""
+    remoto["por_url"]["https://cdn/0.mcpack"] = _manifiesto("u-1")
     publicacion = Publicacion(
         fuente="falsa", id="p", titulo="Bonito", autor="Alguien", url="u",
         descargas=tuple(
-            Descarga(nombre=f"v{i}", url=f"https://cdn/{i}.mcpack") for i in range(5)
+            Descarga(nombre=f"v{i}", url=f"https://cdn/{i}.mcpack") for i in range(20)
         ),
     )
     fuente = FuenteFalsa({"Bonito": [publicacion]})
     Buscador(store, [fuente]).comprobar(_instalado(uuid="u-1", autores=()))
     assert len(remoto["llamadas"]) == 1
+
+
+def test_busca_el_archivo_del_uuid_aunque_otro_coincida_de_nombre(store, remoto):
+    """El caso de «Silk Touch Spawners»: la publicación reparte el pack de
+    recursos y el de comportamiento en archivos distintos, y los dos declaran el
+    mismo `header.name`.
+
+    Quedándose con la primera coincidencia de nombre, el de comportamiento se
+    emparejaba con el archivo del de recursos y actualizarlo instalaba el otro.
+    """
+    remoto["por_url"]["https://cdn/rp.mcpack"] = _manifiesto("uuid-rp", "1.0.24")
+    remoto["por_url"]["https://cdn/bp.mcpack"] = _manifiesto("uuid-bp", "1.0.24")
+    publicacion = Publicacion(
+        fuente="falsa", id="p", titulo="Bonito", autor="Alguien", url="u",
+        descargas=(
+            Descarga(nombre="[RP] Bonito.mcpack", url="https://cdn/rp.mcpack"),
+            Descarga(nombre="[BP] Bonito.mcpack", url="https://cdn/bp.mcpack"),
+        ),
+    )
+    fuente = FuenteFalsa({"Bonito": [publicacion]})
+
+    r = Buscador(store, [fuente]).comprobar(_instalado(uuid="uuid-bp", version="1.0.20"))
+    assert r.uuid_remoto == "uuid-bp"
+    assert r.descarga.nombre == "[BP] Bonito.mcpack"
+
+
+def test_si_ninguno_tiene_el_uuid_vale_el_del_nombre(store, remoto):
+    """Para los packs cuyo autor cambia el uuid en cada versión."""
+    remoto["por_url"]["https://cdn/a.mcpack"] = _manifiesto("otro-uuid", "2.0.0")
+    fuente = FuenteFalsa({"Bonito": [_publicacion()]})
+
+    r = Buscador(store, [fuente]).comprobar(_instalado(uuid="u-viejo", version="1.0.0"))
+    assert r.confianza is Confianza.CONFIRMADO
+    assert r.uuid_remoto == "otro-uuid"
 
 
 # --- caché ---

@@ -73,6 +73,16 @@ class VentanaPrincipal(QMainWindow):
 
         self._tabs = QTabWidget()
         self._tabs.setDocumentMode(True)
+        # Qt dibuja bajo la fila de pestañas una «línea base» de un píxel con el
+        # color de realce del sistema —azul—, que no es de esta paleta. Se ve
+        # cruzando de lado a lado con un hueco bajo la pestaña activa.
+        # `wulf_qt` no estiliza `QTabWidget`, así que se apaga aquí.
+        self._tabs.tabBar().setDrawBase(False)
+        self._tabs.setStyleSheet(
+            "QTabWidget::pane { border: 0; background: transparent; }"
+            "QTabBar { border: 0; }"
+            "QTabBar::tab { background: transparent; }"
+        )
         self._tabs.addTab(self._panel_instalados, "Instalado")
         self._tabs.addTab(self._panel_descargas, "Carpetas")
         self._tabs.addTab(self._panel_actualizaciones, "Actualizaciones")

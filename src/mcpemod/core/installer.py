@@ -62,10 +62,16 @@ class Installer:
         if not analisis.componentes:
             raise ErrorInstalacion(f"{analisis.ruta.name} no contiene nada instalable")
 
-        elegidos = [
-            c for c in analisis.componentes
-            if solo is None or c.uuid in solo or clave_de_pack(c.nombre) in solo
-        ]
+        if solo is None:
+            elegidos = list(analisis.componentes)
+        else:
+            # El uuid antes que el nombre: dos packs hermanos suelen compartir
+            # `header.name`, y quedarse con el del nombre instalaría el otro.
+            elegidos = [c for c in analisis.componentes if c.uuid and c.uuid in solo]
+            if not elegidos:
+                elegidos = [
+                    c for c in analisis.componentes if clave_de_pack(c.nombre) in solo
+                ]
         if not elegidos:
             raise ErrorInstalacion(
                 f"{analisis.ruta.name} no contiene el pack que se iba a actualizar"

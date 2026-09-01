@@ -249,6 +249,13 @@ más cosas dentro, y actualizar uno no debe traer de propina lo que nadie pidió
 En el equipo de prueba pasa con «CSO Terrorists», que está publicado dentro del
 addon de «Actual Guns 2».
 
+Al elegir cuál, **el uuid manda sobre el nombre**. Dos packs hermanos —el de
+recursos y el de comportamiento— suelen compartir `header.name`, y hay
+publicaciones que los reparten en archivos distintos: quedándose con el primero
+que coincide de nombre, uno de los dos se emparejaba con el archivo del otro. Se
+miran hasta tres archivos de la publicación buscando el del uuid correcto, y el
+nombre solo decide si ninguno lo tiene.
+
 **Actualizar todo** hace de una vez las confirmadas. Las que no lo están quedan
 fuera: pueden ser otro pack del mismo autor, y eso se decide una por una mirando
 su publicación. Si alguna falla, las demás siguen y al final se dice cuáles no

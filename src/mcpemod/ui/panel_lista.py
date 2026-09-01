@@ -36,7 +36,18 @@ class PanelLista(QWidget):
         self._raiz.insertWidget(0, widget)
 
     def _poner(self, widgets: list[QWidget]) -> None:
-        """Reemplaza el contenido de la lista, dejando el stretch final en su sitio."""
+        """Reemplaza el contenido de la lista, dejando el stretch final en su sitio.
+
+        Con el repintado apagado mientras dura: quitar cuarenta tarjetas y poner
+        otras cuarenta son ochenta repintados, y se ven como un parpadeo.
+        """
+        self.setUpdatesEnabled(False)
+        try:
+            self._reemplazar(widgets)
+        finally:
+            self.setUpdatesEnabled(True)
+
+    def _reemplazar(self, widgets: list[QWidget]) -> None:
         while self._lista.count() > 1:
             item = self._lista.takeAt(0)
             widget = item.widget()
