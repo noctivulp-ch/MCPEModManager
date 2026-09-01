@@ -129,3 +129,43 @@ Nada de esto está hecho. Lo que costaría, por si se retoma:
 El riesgo a tener presente: un `pack_id` o una `version` que no cuadren con el
 manifiesto hacen que el pack no cargue, y el juego no dice por qué. Cualquier
 escritura en estos archivos debería ir precedida de una copia del original.
+
+
+## Respaldo de mundos
+
+Un mundo es lo único de aquí que no se puede volver a descargar. Un pack se baja
+otra vez; una partida de meses, no. Por eso **ningún cambio en un mundo se hace
+sin respaldarlo antes**, y si el respaldo falla el cambio no se hace.
+
+### Dónde
+
+```
+com.mojang/mcpemod_respaldos/<carpeta-del-mundo>.tar.zst
+```
+
+Dentro de `com.mojang`, para que acompañen a la instalación si se mueve o se
+copia. **Fuera de `minecraftWorlds`**, porque ahí dentro se verían como mundos
+más —tanto para este gestor como para el juego— y aparecerían duplicados. El
+nombre no coincide con ninguna carpeta del juego, así que este no la va a pisar.
+
+### Uno por mundo
+
+Se guarda **uno solo por mundo**, no una pila: un mundo real ocupa decenas de
+megas comprimido. Guardar otra vez **sustituye** el anterior, y eso es una
+pérdida real: quien lo pida tiene que ver antes de qué fecha era el que se va a
+perder (`existente()` lo devuelve).
+
+### Que sirva para restaurar
+
+Un `tar` que no da error no basta. Al guardar y al restaurar se comprueba que el
+archivo se puede leer y que **trae un `level.dat` dentro**; si no, se rechaza.
+
+Las dos operaciones están hechas para que un fallo a mitad no se lleve nada:
+
+- **Guardar** escribe en un temporal y solo entonces sustituye el anterior, con
+  un `replace` atómico. Si algo falla, sigue estando el que había.
+- **Restaurar** extrae al lado, comprueba, y solo entonces intercambia. Si la
+  extracción falla o lo extraído no es un mundo, el mundo que hay no se toca.
+
+Medido sobre un mundo real de 15 782 archivos: 69 MB comprimidos, y la
+restauración devuelve el árbol **idéntico** —misma huella de todos los archivos—.

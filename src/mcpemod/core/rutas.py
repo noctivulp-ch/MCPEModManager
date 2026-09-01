@@ -55,6 +55,19 @@ class Instalacion:
         return self.com_mojang / "minecraftWorlds"
 
     @property
+    def respaldos_de_mundos(self) -> Path:
+        """Dónde se guardan las copias de los mundos de esta instalación.
+
+        Dentro de `com.mojang`, para que viajen con ella si se mueve o se copia,
+        pero **fuera de `minecraftWorlds`**: ahí dentro el gestor —y el propio
+        juego— los tomarían por mundos, y aparecerían duplicados.
+
+        El nombre no coincide con ninguna carpeta del juego, así que este no la
+        va a pisar ni a vaciar creyendo que es suya.
+        """
+        return self.com_mojang / "mcpemod_respaldos"
+
+    @property
     def mods_nativos(self) -> Path:
         """Los `.so` del launcher — no son contenido del juego, pero se gestionan igual."""
         return self.raiz_launcher / "mods"

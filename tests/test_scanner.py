@@ -273,3 +273,12 @@ def test_un_contents_json_cualquiera_no_lo_marca(scanner, instalacion):
     carpeta = _pack_instalado(instalacion.resource_packs, "X", nombre="X", uuid="u")
     (carpeta / "contents.json").write_text('{"esto": "es json normal"}')
     assert scanner.leer_instalados()[0].de_la_tienda is False
+
+
+def test_los_respaldos_de_mundos_no_se_leen_como_contenido(scanner, instalacion):
+    """Viven dentro de `com.mojang` pero fuera de las carpetas que se recorren."""
+    instalacion.respaldos_de_mundos.mkdir(parents=True)
+    (instalacion.respaldos_de_mundos / "bE2ZIuTv+eY=.tar.zst").write_bytes(b"\x28\xb5\x2f\xfd")
+
+    assert scanner.leer_instalados() == []
+    assert instalacion.respaldos_de_mundos not in instalacion.directorios_contenido
