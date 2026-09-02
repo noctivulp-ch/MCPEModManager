@@ -10,12 +10,13 @@ from PySide6.QtWidgets import (
     QComboBox, QHBoxLayout, QLabel, QLineEdit, QVBoxLayout, QWidget,
 )
 
-from wulf_qt import GAP_CELDA, PARED, Pozo, boton, boton_plano
+from wulf_qt import GAP_CELDA, PARED, IconoTamano, Pozo, boton, boton_plano, icono
 
 from mcpemod.core import ErrorInstalacion, Installer, Scanner, Store, analizar
 from mcpemod.core.fuentes import Publicacion, fuentes_disponibles
 from mcpemod.core.red import ErrorRed, descargar
 from mcpemod.senales import conectar
+from mcpemod.ui import iconos
 from mcpemod.ui.ajustes import CLAVE_CURSEFORGE
 from mcpemod.ui.estilo import TEXTO_SECUNDARIO
 from mcpemod.ui.panel_lista import PanelLista
@@ -67,6 +68,13 @@ class PanelExplorar(PanelLista):
         self._busqueda = QLineEdit()
         self._busqueda.setPlaceholderText("Buscar packs, addons, mundos…")
         self._busqueda.setClearButtonEnabled(True)
+        # Dentro del campo y no al lado: es el sitio que la librería reserva para
+        # el tamaño chico, y aquí distingue de un vistazo el campo de búsqueda del
+        # selector de fuente que lleva pegado.
+        self._busqueda.addAction(
+            icono(iconos.BUSCAR, TEXTO_SECUNDARIO, IconoTamano.CHICO),
+            QLineEdit.ActionPosition.LeadingPosition,
+        )
         conectar(self._busqueda.textChanged, self._al_teclear)
         fila.addWidget(self._busqueda, stretch=1)
 
@@ -89,11 +97,11 @@ class PanelExplorar(PanelLista):
         pie.addWidget(self._lbl_estado)
         pie.addStretch()
 
-        self._btn_anterior = boton_plano("‹ Anterior")
+        self._btn_anterior = iconos.poner(boton_plano("Anterior"), iconos.ATRAS)
         conectar(self._btn_anterior.clicked, lambda: self._ir_a(self._pagina - 1))
         pie.addWidget(self._btn_anterior)
 
-        self._btn_siguiente = boton("Siguiente ›")
+        self._btn_siguiente = iconos.poner(boton("Siguiente"), iconos.ADELANTE, detras=True)
         conectar(self._btn_siguiente.clicked, lambda: self._ir_a(self._pagina + 1))
         pie.addWidget(self._btn_siguiente)
 

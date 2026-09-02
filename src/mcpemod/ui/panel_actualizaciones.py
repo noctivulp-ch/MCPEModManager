@@ -15,6 +15,7 @@ from mcpemod.core.actualizaciones import Buscador, Resultado
 from mcpemod.core.fuentes import fuentes_disponibles
 from mcpemod.core.red import ErrorRed, descargar
 from mcpemod.senales import conectar
+from mcpemod.ui import iconos
 from mcpemod.ui.ajustes import CLAVE_CURSEFORGE
 from mcpemod.ui.estilo import TEXTO_SECUNDARIO
 from mcpemod.ui.panel_lista import PanelLista
@@ -74,18 +75,18 @@ class PanelActualizaciones(PanelLista):
         fila.addWidget(self._lbl_estado)
         fila.addStretch()
 
-        self._btn_comprobar = boton_primario("Comprobar")
+        self._btn_comprobar = iconos.poner(boton_primario("Comprobar"), iconos.COMPROBAR)
         conectar(self._btn_comprobar.clicked, self._comprobar)
         fila.addWidget(self._btn_comprobar)
 
-        self._btn_revisar = boton("Volver a comprobar")
+        self._btn_revisar = iconos.poner(boton("Volver a comprobar"), iconos.REVISAR)
         self._btn_revisar.setToolTip(
             "Vuelve a preguntar por todos, sin esperar a que caduque lo comprobado."
         )
         conectar(self._btn_revisar.clicked, lambda: self._comprobar(forzar=True))
         fila.addWidget(self._btn_revisar)
 
-        self._btn_todo = boton("Actualizar todo")
+        self._btn_todo = iconos.poner(boton("Actualizar todo"), iconos.ACTUALIZAR)
         self._btn_todo.hide()
         conectar(self._btn_todo.clicked, self._actualizar_todo)
         fila.addWidget(self._btn_todo)

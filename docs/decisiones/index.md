@@ -20,3 +20,4 @@
 | [0020](0020-nombre-identifica-uuid-versiona.md) | El nombre identifica el pack; el uuid, la versión | Aceptada |
 | [0021](0021-clave-de-curseforge.md) | La clave de CurseForge la pone el usuario | Aceptada |
 | [0022](0022-migracion-de-esquema.md) | Las columnas nuevas se añaden a las bases que ya existen | Aceptada |
+| [0023](0023-iconos.md) | Los iconos dicen la acción, y las flechas dicen el movimiento | Aceptada |

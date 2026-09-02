@@ -18,15 +18,18 @@ Los packs se mueven de tres maneras, y las tres hacen lo mismo:
 from __future__ import annotations
 
 from PySide6.QtCore import QMimeData, Qt, Signal
-from PySide6.QtGui import QDrag, QMouseEvent
+from PySide6.QtGui import QDrag, QFontMetrics, QMouseEvent
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
 
-from wulf_qt import GAP_CELDA, PADDING_CELDA, PARED, Pozo, Tallado, boton
+from wulf_qt import (
+    GAP_CELDA, PADDING_CELDA, PARED, IconoTamano, Pozo, Tallado, boton, icono,
+)
 
 from mcpemod.core import Instalado
 from mcpemod.senales import conectar
+from mcpemod.ui import iconos
 from mcpemod.ui.estilo import (
     AMBAR, SOBRE_BANDEJA, TEXTO_EN_POZO, TEXTO_SECUNDARIO, VIOLETA,
 )
@@ -38,14 +41,29 @@ from mcpemod.ui.widgets.lista_por_categoria import agrupar, cabecera
 #: confunda con texto arrastrado desde fuera de la app.
 MIME_PACK = "application/x-mcpemod-pack"
 
-#: Un nombre más largo se parte en dos líneas y descuadra la fila; el completo
-#: queda en el tooltip.
-_LARGO_NOMBRE = 30
+class NombreElidido(QLabel):
+    """El nombre del pack, recortado con puntos suspensivos al ancho que le toque.
 
+    Recortar por número de caracteres no vale: lo que sobra depende de cuántos
+    botones lleve la fila y de cuánta anchura le deje el badge, y eso solo se sabe
+    cuando Qt ya ha repartido el sitio. Sin esto el nombre se corta en seco a
+    media letra y no hay forma de distinguir «Better Trees by Da…» de un pack que
+    de verdad se llame así.
+    """
 
-def _recortar(nombre: str) -> str:
-    limpio = " ".join(nombre.split())
-    return limpio if len(limpio) <= _LARGO_NOMBRE else limpio[:_LARGO_NOMBRE].rstrip() + "…"
+    def __init__(self, texto: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._entero = " ".join(texto.split())
+        self.setToolTip(self._entero)
+        self.setWordWrap(False)
+        self.setText(self._entero)
+
+    def resizeEvent(self, evento) -> None:  # noqa: N802 (API de Qt)
+        super().resizeEvent(evento)
+        metricas = QFontMetrics(self.font())
+        self.setText(metricas.elidedText(
+            self._entero, Qt.TextElideMode.ElideRight, self.width()
+        ))
 
 
 class Asa(QLabel):
@@ -56,13 +74,19 @@ class Asa(QLabel):
     """
 
     def __init__(self, uuid: str, parent: QWidget | None = None) -> None:
-        super().__init__("≡", parent)
+        super().__init__(parent)
         self._uuid = uuid
         self.setToolTip("Arrastra para mover o cambiar de lado")
         self.setCursor(Qt.CursorShape.OpenHandCursor)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setFixedWidth(20)
-        self.setStyleSheet(f"color: {TEXTO_SECUNDARIO}; font-size: 15px;")
+        # Ancho de sobra alrededor del dibujo: el icono mide 20 y el asa 28,
+        # porque lo que se agarra con el ratón no es el trazo sino la zona.
+        self.setFixedWidth(28)
+        self.setPixmap(
+            icono(iconos.ASA, TEXTO_SECUNDARIO, IconoTamano.CHICO).pixmap(
+                IconoTamano.CHICO, IconoTamano.CHICO
+            )
+        )
 
     def mousePressEvent(self, evento: QMouseEvent) -> None:  # noqa: N802 (API de Qt)
         if evento.button() != Qt.MouseButton.LeftButton:
@@ -136,20 +160,19 @@ class FilaPack(QWidget):
         # Un `QLabel` y no un `Tallado`: el relieve parte el texto en dos líneas
         # cuando no cabe —lo pinta con ajuste de línea y no se puede apagar— y en
         # una fila estrecha eso descuadra todo. Aquí manda que quepa en una línea.
-        nombre = QLabel(_recortar(self._pieza.nombre))
-        nombre.setWordWrap(False)
+        nombre = NombreElidido(self._pieza.nombre)
         nombre.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         nombre.setStyleSheet(f"color: {TEXTO_EN_POZO}; font-size: 12px; font-weight: 600;")
         # Con ancho ignorado: un nombre largo impondría el suyo a la columna y
         # empujaría los botones fuera de la tarjeta.
         nombre.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        nombre.setToolTip(self._pieza.nombre)
         fila.addWidget(nombre, stretch=1)
 
+        # Solo lo que se puede accionar desde aquí. «Sin extraer» es cierto pero
+        # se extrae en Instalado, no en esta columna: aquí únicamente le comía
+        # anchura al nombre, que es lo que sí hace falta leer.
         if self._pieza.de_la_tienda:
             fila.addWidget(badge("Tienda", VIOLETA))
-        elif self._pieza.forma.etiqueta:
-            fila.addWidget(badge(self._pieza.forma.etiqueta, AMBAR))
         if self._desfase:
             marca = badge("desfasado", AMBAR)
             marca.setToolTip(
@@ -167,23 +190,23 @@ class FilaPack(QWidget):
         fila.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         if self._activo:
-            # El orden importa: el último de la lista gana.
-            # Con palabras y no con flechas: los glifos ↑↓ no están en la fuente
-            # de los botones y salen como cajas vacías.
-            for etiqueta, que, ayuda in (
-                ("Subir", "subir", "Se aplica antes, así que pierde ante los de abajo"),
-                ("Bajar", "bajar", "Se aplica después, así que gana"),
+            # El orden importa: el último de la lista gana. Solo el dibujo y sin
+            # palabra: en una fila que ya lleva tres botones, «Subir»/«Bajar»
+            # ocupan más de lo que aclaran, y una flecha dice exactamente eso.
+            for dibujo, que, ayuda in (
+                (iconos.SUBIR, "subir", "Subir — se aplica antes, así que pierde ante los de abajo"),
+                (iconos.BAJAR, "bajar", "Bajar — se aplica después, así que gana"),
             ):
-                b = boton(etiqueta)
+                b = iconos.poner(boton(""), dibujo)
                 b.setToolTip(ayuda)
                 conectar(b.clicked, lambda q=que: self.accion.emit(self._pieza, q))
                 fila.addWidget(b)
 
-            quitar = boton("Quitar")
+            quitar = iconos.poner(boton("Quitar"), iconos.DESACTIVAR)
             conectar(quitar.clicked, lambda: self.accion.emit(self._pieza, "desactivar"))
             fila.addWidget(quitar)
         else:
-            poner = boton("Activar")
+            poner = iconos.poner(boton("Activar"), iconos.ACTIVAR, detras=True)
             conectar(poner.clicked, lambda: self.accion.emit(self._pieza, "activar"))
             fila.addWidget(poner)
 

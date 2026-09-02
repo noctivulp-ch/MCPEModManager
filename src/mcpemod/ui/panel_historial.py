@@ -4,17 +4,20 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
-from wulf_qt import GAP_CELDA, Pozo
+from wulf_qt import GAP_CELDA, IconoTamano, Pozo, icono
 
 from mcpemod.core import EntradaHistorial, Store
+from mcpemod.ui import iconos
 from mcpemod.ui.estilo import AMBAR, CIAN, GRIS, ROJO, TEXTO_SECUNDARIO, VERDE
 from mcpemod.ui.panel_lista import PanelLista
 
+#: El dibujo y el color con que se marca cada clase de cambio. Es lo que se
+#: recorre con la vista cuando se busca «cuándo desinstalé aquello».
 _ACCIONES = {
-    "instalar": ("↓", VERDE),
-    "actualizar": ("↑", AMBAR),
-    "desinstalar": ("✕", ROJO),
-    "normalizar": ("⟳", CIAN),
+    "instalar": (iconos.INSTALAR, VERDE),
+    "actualizar": (iconos.ACTUALIZAR, AMBAR),
+    "desinstalar": (iconos.DESINSTALAR, ROJO),
+    "normalizar": (iconos.NORMALIZAR, CIAN),
 }
 
 
@@ -34,9 +37,11 @@ def _fila(e: EntradaHistorial) -> QWidget:
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(GAP_CELDA)
 
-    icono, color = _ACCIONES.get(e.accion, ("·", GRIS))
-    lbl_icono = QLabel(icono)
-    lbl_icono.setStyleSheet(f"color: {color}; font-size: 14px; font-weight: bold;")
+    dibujo, color = _ACCIONES.get(e.accion, (iconos.ESPERANDO, GRIS))
+    lbl_icono = QLabel()
+    lbl_icono.setPixmap(
+        icono(dibujo, color, IconoTamano.CHICO).pixmap(IconoTamano.CHICO, IconoTamano.CHICO)
+    )
     layout.addWidget(lbl_icono)
 
     info = QVBoxLayout()

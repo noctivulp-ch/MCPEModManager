@@ -14,6 +14,7 @@ from wulf_qt import GAP_CELDA, Pozo, Tallado, boton_primario
 
 from mcpemod.core import Analisis, Componente, Instalado
 from mcpemod.core.version import EstadoVersion, comparar
+from mcpemod.ui import iconos
 from mcpemod.ui.estilo import (
     AMBAR, COLOR_CATEGORIA, GRIS, SOBRE_POZO, TEXTO_SECUNDARIO, VERDE,
 )
@@ -121,7 +122,9 @@ class TarjetaDescarga(QWidget):
     def _fila_acciones(self) -> QHBoxLayout:
         fila = QHBoxLayout()
         fila.setAlignment(Qt.AlignmentFlag.AlignVCenter)
-        btn = boton_primario(self._etiqueta_boton())
+        etiqueta = self._etiqueta_boton()
+        dibujo = iconos.ACTUALIZAR if etiqueta == "Actualizar" else iconos.INSTALAR
+        btn = iconos.poner(boton_primario(etiqueta), dibujo)
         btn.clicked.connect(lambda: self.instalar_pedido.emit(self._analisis))
         fila.addWidget(btn)
         return fila

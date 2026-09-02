@@ -10,6 +10,7 @@ from wulf_qt import GAP_CELDA, Pozo, Tallado, boton, boton_primario
 
 from mcpemod.core.actualizaciones import Confianza, Resultado
 from mcpemod.core.version import EstadoVersion
+from mcpemod.ui import iconos
 from mcpemod.ui.estilo import AMBAR, GRIS, SOBRE_POZO, TEXTO_SECUNDARIO, VERDE
 from mcpemod.ui.widgets.badge import badge
 
@@ -90,13 +91,13 @@ class TarjetaActualizacion(QWidget):
 
         publicacion = self._r.publicacion
         if publicacion and publicacion.url:
-            ver = boton("Ver")
+            ver = iconos.poner(boton("Ver"), iconos.SITIO)
             ver.setToolTip(publicacion.url)
             ver.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(publicacion.url)))
             fila.addWidget(ver)
 
         if self._r.hay_actualizacion and self._r.descarga:
-            btn = boton_primario("Actualizar")
+            btn = iconos.poner(boton_primario("Actualizar"), iconos.ACTUALIZAR)
             btn.clicked.connect(lambda: self.actualizar_pedido.emit(self._r))
             fila.addWidget(btn)
 

@@ -14,6 +14,8 @@ from PySide6.QtGui import QDesktopServices
 
 from wulf_qt import boton
 
+from mcpemod.ui import iconos
+
 _LARGO_MAX = 52
 
 
@@ -36,11 +38,11 @@ def abreviar(ruta: Path) -> str:
 def boton_ruta(ruta: Path, prefijo: str = ""):
     """Un botón que abre `ruta` en el explorador de archivos."""
     existe = ruta.is_dir()
-    # La flecha dice que abre algo fuera de la app; sin ella un botón con una
-    # ruta dentro se lee como una etiqueta más.
-    etiqueta = f"{prefijo}{abreviar(ruta)}  ↗" if existe else f"{prefijo}{abreviar(ruta)}  (no existe)"
+    # El icono de carpeta dice que esto lleva a un sitio del disco; sin él un
+    # botón con una ruta dentro se lee como una etiqueta más.
+    etiqueta = f"{prefijo}{abreviar(ruta)}" if existe else f"{prefijo}{abreviar(ruta)}  (no existe)"
 
-    b = boton(etiqueta)
+    b = iconos.poner(boton(etiqueta), iconos.CARPETA)
     b.setEnabled(existe)
     b.setToolTip(f"Abrir {ruta} en el explorador de archivos" if existe
                  else f"{ruta}\nno existe ahora mismo")

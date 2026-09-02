@@ -15,7 +15,10 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QMessageBox, QStackedWidget, QVBoxLayout, QWidget,
 )
 
-from wulf_qt import GAP_CELDA, PARED, Pozo, Tallado, boton, boton_plano, boton_primario
+from wulf_qt import (
+    GAP_CELDA, PARED, IconoTamano, Pozo, Tallado, boton, boton_plano, boton_primario,
+    icono,
+)
 
 from mcpemod.core import Installer, Instalado, Scanner
 from mcpemod.core.activacion import (
@@ -24,6 +27,7 @@ from mcpemod.core.activacion import (
 from mcpemod.core.contenido import Categoria
 from mcpemod.core.respaldo_mundo import ErrorRespaldo, existente, guardar, restaurar
 from mcpemod.senales import conectar
+from mcpemod.ui import iconos
 from mcpemod.ui.estilo import SOBRE_BANDEJA, TEXTO_SECUNDARIO
 from mcpemod.ui.widgets import ColumnaPacks
 
@@ -31,6 +35,10 @@ _SIN_COMPORTAMIENTO = (
     "Los packs de comportamiento no se activan aquí: cambian el contenido del "
     "mundo, así que van en cada mundo."
 )
+
+
+def _packs(cuantos: int) -> str:
+    return "pack" if cuantos == 1 else "packs"
 
 
 class PanelActivacion(QWidget):
@@ -82,6 +90,18 @@ class PanelActivacion(QWidget):
         fila.setContentsMargins(0, 0, 0, 0)
         fila.setSpacing(GAP_CELDA)
 
+        # Global y un mundo se gestionan igual pero no son la misma cosa, y en una
+        # lista donde los nombres los pone el jugador el dibujo es lo único que
+        # los separa sin leer.
+        marca = QLabel()
+        dibujo = iconos.MUNDO if isinstance(ambito, Mundo) else iconos.GLOBAL
+        marca.setPixmap(
+            icono(dibujo, TEXTO_SECUNDARIO, IconoTamano.NORMAL).pixmap(
+                IconoTamano.NORMAL, IconoTamano.NORMAL
+            )
+        )
+        fila.addWidget(marca)
+
         info = QVBoxLayout()
         info.setSpacing(2)
         titulo = Tallado(ambito.nombre, sobre=SOBRE_BANDEJA)
@@ -91,7 +111,7 @@ class PanelActivacion(QWidget):
         info.addWidget(lbl)
         fila.addLayout(info, stretch=1)
 
-        entrar = boton_primario("Gestionar")
+        entrar = iconos.poner(boton_primario("Gestionar"), iconos.ADELANTE, detras=True)
         conectar(entrar.clicked, lambda: self._entrar(ambito))
         fila.addWidget(entrar)
         return Pozo(contenedor)
@@ -109,13 +129,14 @@ class PanelActivacion(QWidget):
         general = Global(instalacion)
         activos = len(general.activos(Categoria.RECURSO))
         self._lista_ambitos.addWidget(self._fila_ambito(
-            general, f"{activos} packs de recursos aplicados a todo el juego"
+            general,
+            f"{activos} {_packs(activos)} de recursos aplicados a todo el juego",
         ))
 
         for mundo in mundos_de(instalacion):
             n = len(mundo.uuids_activos())
             desfasados = self._desfases(mundo)
-            detalle = f"{n} packs activos"
+            detalle = f"{n} {_packs(n)} activos"
             if desfasados:
                 detalle += f"  ·  {len(desfasados)} con versión más vieja que la instalada"
             self._lista_ambitos.addWidget(self._fila_ambito(mundo, detalle))
@@ -165,7 +186,7 @@ class PanelActivacion(QWidget):
         fila.setContentsMargins(0, 0, 0, 0)
         fila.setSpacing(GAP_CELDA)
 
-        volver = boton_plano("‹ Volver")
+        volver = iconos.poner(boton_plano("Volver"), iconos.ATRAS)
         conectar(volver.clicked, self._salir)
         fila.addWidget(volver)
 
@@ -178,11 +199,11 @@ class PanelActivacion(QWidget):
         self._lbl_respaldo.setStyleSheet(f"color: {TEXTO_SECUNDARIO}; font-size: 11px;")
         fila.addWidget(self._lbl_respaldo)
 
-        self._btn_respaldar = boton("Guardar respaldo")
+        self._btn_respaldar = iconos.poner(boton("Guardar respaldo"), iconos.GUARDAR)
         conectar(self._btn_respaldar.clicked, self._respaldar_ahora)
         fila.addWidget(self._btn_respaldar)
 
-        self._btn_restaurar = boton("Restaurar")
+        self._btn_restaurar = iconos.poner(boton("Restaurar"), iconos.RESTAURAR)
         conectar(self._btn_restaurar.clicked, self._restaurar)
         fila.addWidget(self._btn_restaurar)
 

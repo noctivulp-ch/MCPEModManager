@@ -15,6 +15,7 @@ from wulf_qt import (
 
 from mcpemod.core import Instalacion, Installer, Scanner, Store
 from mcpemod.senales import conectar
+from mcpemod.ui import iconos
 from mcpemod.ui import soltar
 from mcpemod.ui.dialogo_ajustes import dialogo_ajustes
 from mcpemod.ui.panel_activacion import PanelActivacion
@@ -128,7 +129,7 @@ class VentanaPrincipal(QMainWindow):
         self._boton_ruta = boton_ruta(self._scanner.instalacion.com_mojang)
         fila.addWidget(self._boton_ruta)
 
-        ajustes = boton_plano("Ajustes")
+        ajustes = iconos.poner(boton_plano("Ajustes"), iconos.AJUSTES)
         conectar(ajustes.clicked, self._abrir_ajustes)
         fila.addWidget(ajustes)
 

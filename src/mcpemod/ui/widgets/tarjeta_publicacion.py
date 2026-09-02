@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QSizePolicy
 from wulf_qt import GAP_CELDA, Pozo, Tallado, boton, boton_primario
 
 from mcpemod.core.fuentes import Publicacion
+from mcpemod.ui import iconos
 from mcpemod.ui.estilo import AMBAR, GRIS, SOBRE_POZO, TEXTO_SECUNDARIO, VERDE
 from mcpemod.ui.widgets.badge import badge
 
@@ -114,13 +115,14 @@ class TarjetaPublicacion(QWidget):
         fila.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         if self._p.url:
-            ver = boton("Ver")
+            ver = iconos.poner(boton("Ver"), iconos.SITIO)
             ver.setToolTip(self._p.url)
             ver.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(self._p.url)))
             fila.addWidget(ver)
 
         if self._p.ultima:
-            btn = boton_primario("Reinstalar" if self._instalado else "Instalar")
+            btn = iconos.poner(boton_primario("Reinstalar" if self._instalado else "Instalar"),
+                               iconos.INSTALAR)
             btn.clicked.connect(lambda: self.instalar_pedido.emit(self._p))
             fila.addWidget(btn)
 

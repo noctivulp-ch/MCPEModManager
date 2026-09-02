@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 from wulf_qt import GAP_CELDA, Pozo, Tallado, boton, boton_primario
 
 from mcpemod.core import Instalado
+from mcpemod.ui import iconos
 from mcpemod.ui.estilo import AMBAR, SOBRE_POZO, TEXTO_SECUNDARIO, VIOLETA
 from mcpemod.ui.widgets.badge import badge
 
@@ -90,7 +91,7 @@ class TarjetaInstalado(QWidget):
         # Pocos packs declaran su página en `metadata.url`, pero cuando está es
         # el camino directo al sitio de quien lo hizo.
         if self._pieza.url:
-            sitio = boton("Sitio")
+            sitio = iconos.poner(boton("Sitio"), iconos.SITIO)
             sitio.setToolTip(self._pieza.url)
             sitio.clicked.connect(
                 lambda: QDesktopServices.openUrl(QUrl(self._pieza.url))
@@ -98,7 +99,7 @@ class TarjetaInstalado(QWidget):
             fila.addWidget(sitio)
 
         if self._pieza.forma.normalizable:
-            btn = boton_primario("Extraer")
+            btn = iconos.poner(boton_primario("Extraer"), iconos.EXTRAER)
             btn.setToolTip(
                 "Deja el pack como una carpeta normal, para poder actualizarlo\n"
                 "y desinstalarlo igual que el resto. El juego admite las dos formas."
@@ -106,7 +107,7 @@ class TarjetaInstalado(QWidget):
             btn.clicked.connect(lambda: self.normalizar_pedido.emit(self._pieza))
             fila.addWidget(btn)
 
-        btn = boton("Desinstalar")
+        btn = iconos.poner(boton("Desinstalar"), iconos.DESINSTALAR)
         btn.clicked.connect(lambda: self.desinstalar_pedido.emit(self._pieza))
         fila.addWidget(btn)
         return fila

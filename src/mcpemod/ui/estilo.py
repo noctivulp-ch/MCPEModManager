@@ -7,10 +7,16 @@ la laca en vez de inventar grises que no pertenecen al sistema.
 
 from __future__ import annotations
 
-from wulf_qt.tokens import LACAS, Modo
+from wulf_qt.tokens import LACAS, METALES, SOBRE_METAL, Acento, Modo
 
 MODO = Modo.OSCURO
+ACENTO = Acento.ORO
 LACA = LACAS[MODO]
+
+METAL = METALES[ACENTO][MODO]
+#: Lo que se lee —y se dibuja— encima del metal: el botón primario va
+#: relleno, así que un icono teñido con el color del pozo se pierde en él.
+SOBRE_METAL_ = SOBRE_METAL[ACENTO][MODO]
 
 SOBRE_BANDEJA = LACA.bandeja
 SOBRE_POZO = LACA.pozo
