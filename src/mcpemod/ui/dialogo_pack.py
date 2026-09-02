@@ -15,6 +15,8 @@ este es el sitio equivalente.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from PySide6.QtCore import QUrl, Qt
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
@@ -29,14 +31,15 @@ from wulf_qt import (
 
 from mcpemod.core.activacion import Ambito, ErrorActivacion
 from mcpemod.core.manifiesto import Manifiesto
+from mcpemod.core.miniatura import de_ruta, leer
 from mcpemod.core.mod import Instalado
 from mcpemod.senales import conectar
 from mcpemod.ui import iconos
 from mcpemod.ui.estilo import (
-    AMBAR, SOBRE_BANDEJA, TEXTO_EN_POZO, TEXTO_SECUNDARIO,
+    AMBAR, GRIS, SOBRE_BANDEJA, TEXTO_EN_POZO, TEXTO_SECUNDARIO, VIOLETA,
 )
 from mcpemod.ui.widgets.badge import badge
-from mcpemod.ui.widgets.miniatura import GRANDE, Miniatura
+from mcpemod.ui.widgets.miniatura import GRANDE, MiniaturaDe
 
 #: Lo que el juego elige solo cuando nadie ha elegido. No es «sin variante»: la
 #: documentación dice que sin elección coge «the highest memory_performance_tier
@@ -44,21 +47,86 @@ from mcpemod.ui.widgets.miniatura import GRANDE, Miniatura
 AUTOMATICO = "  (automático)"
 
 
+@dataclass(frozen=True)
+class Ficha:
+    """Lo que la ficha enseña, venga de donde venga.
+
+    Un pack instalado y un archivo de la carpeta de descargas tienen las mismas
+    cosas que contar —qué es, quién lo hizo, qué variantes trae— pero no son lo
+    mismo: el segundo no está puesto en ninguna parte. Fabricar un `Instalado`
+    falso para reaprovechar la ficha lo haría parecer instalado en cuanto
+    cualquiera lo pasara a otra función.
+
+    `pieza` solo lo trae lo que sí está instalado, y es lo único que permite
+    elegir variante: la elección se guarda en la entrada de activación.
+    """
+
+    nombre: str
+    version: str | None
+    categoria: str
+    portada_clave: str
+    portada: object                      # callable, para no abrir el zip de más
+    manifiesto: Manifiesto | None = None
+    autores: tuple[str, ...] = ()
+    url: str = ""
+    licencia: str = ""
+    marcas: tuple[tuple[str, str], ...] = ()
+    pieza: Instalado | None = None
+
+
+def de_instalado(pieza: Instalado, manifiesto: Manifiesto | None) -> Ficha:
+    marcas = []
+    if pieza.de_la_tienda:
+        marcas.append(("Tienda", VIOLETA))
+    if pieza.forma.etiqueta:
+        marcas.append((pieza.forma.etiqueta, AMBAR))
+    if pieza.licencia:
+        marcas.append((pieza.licencia, GRIS))
+    return Ficha(
+        nombre=pieza.nombre, version=pieza.version,
+        categoria=pieza.categoria.etiqueta,
+        portada_clave=str(pieza.ruta), portada=lambda: leer(pieza),
+        manifiesto=manifiesto, autores=pieza.autores, url=pieza.url,
+        licencia=pieza.licencia, marcas=tuple(marcas), pieza=pieza,
+    )
+
+
+def de_componente(ruta, componente) -> Ficha:
+    """Un pack dentro de un archivo que todavía no se ha instalado.
+
+    El manifiesto ya viene leído en el componente: lo dejó ahí el análisis del
+    archivo, así que no hay que volver a abrir el zip para la descripción.
+    """
+    m = componente.manifiesto
+    return Ficha(
+        nombre=componente.nombre, version=componente.version,
+        categoria=componente.categoria.etiqueta,
+        portada_clave=f"{ruta}|{componente.prefijo}|{componente.anidado_en}",
+        portada=lambda: de_ruta(ruta, componente.prefijo, componente.anidado_en),
+        manifiesto=m,
+        autores=m.autores if m else (), url=m.url if m else "",
+        licencia=m.licencia if m else "",
+        marcas=(("sin instalar", GRIS),),
+    )
+
+
 class FichaPack(QWidget):
     """El cuerpo del diálogo. Aparte para poder probarlo sin abrir nada."""
 
     def __init__(
         self,
-        pieza: Instalado,
-        manifiesto: Manifiesto | None,
+        ficha: Ficha,
         ambito: Ambito | None = None,
         activo: bool = False,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self._pieza = pieza
-        self._manifiesto = manifiesto
-        self._ambito = ambito
+        self._ficha = ficha
+        self._pieza = ficha.pieza
+        self._manifiesto = ficha.manifiesto
+        # Sin pieza instalada no hay entrada de activación donde guardar la
+        # elección, así que las variantes se enseñan y no se tocan.
+        self._ambito = ambito if ficha.pieza is not None else None
         self._grupo: QButtonGroup | None = None
 
         raiz = QVBoxLayout(self)
@@ -87,16 +155,18 @@ class FichaPack(QWidget):
     def _cabecera(self) -> QHBoxLayout:
         fila = QHBoxLayout()
         fila.setSpacing(GAP_CELDA)
-        fila.addWidget(Miniatura(self._pieza, GRANDE),
-                       alignment=Qt.AlignmentFlag.AlignTop)
+        fila.addWidget(
+            MiniaturaDe(self._ficha.portada_clave, self._ficha.portada, GRANDE),
+            alignment=Qt.AlignmentFlag.AlignTop,
+        )
 
         # Sin repetir el nombre: es el título del diálogo, y ahí se lee mejor
         # —completo y sin competir con la portada—.
         texto = QVBoxLayout()
         texto.setSpacing(2)
-        senas = [f"v{self._pieza.version or '?'}", self._pieza.categoria.etiqueta]
-        if self._pieza.autores:
-            senas.append("de " + ", ".join(self._pieza.autores))
+        senas = [f"v{self._ficha.version or '?'}", self._ficha.categoria]
+        if self._ficha.autores:
+            senas.append("de " + ", ".join(self._ficha.autores))
         linea = QLabel("  ·  ".join(senas))
         linea.setWordWrap(True)
         linea.setStyleSheet(f"color: {TEXTO_SECUNDARIO}; font-size: 11px;")
@@ -104,12 +174,8 @@ class FichaPack(QWidget):
 
         marcas = QHBoxLayout()
         marcas.setSpacing(GAP_CELDA // 3)
-        if self._pieza.de_la_tienda:
-            marcas.addWidget(badge("Tienda"))
-        if self._pieza.forma.etiqueta:
-            marcas.addWidget(badge(self._pieza.forma.etiqueta, AMBAR))
-        if self._pieza.licencia:
-            marcas.addWidget(badge(self._pieza.licencia))
+        for etiqueta, color in self._ficha.marcas:
+            marcas.addWidget(badge(etiqueta, color))
         marcas.addStretch()
         texto.addLayout(marcas)
 
@@ -240,21 +306,21 @@ def _seccion(titulo: str, nota: str) -> QWidget:
 
 
 def dialogo_pack(
-    pieza: Instalado,
-    manifiesto: Manifiesto | None,
+    ficha_datos: Ficha,
     ambito: Ambito | None = None,
     activo: bool = False,
     parent: QWidget | None = None,
 ) -> Dialogo:
-    ficha = FichaPack(pieza, manifiesto, ambito, activo)
+    ficha = FichaPack(ficha_datos, ambito, activo)
 
     # `Acciones` decide dónde va cada botón: confirmar a la derecha, y lo que
     # actúa sobre el objeto —abrir el sitio del autor— lejos del pulgar.
     extras = []
-    if pieza.url:
+    if ficha_datos.url:
         sitio = iconos.poner(boton("Sitio del pack"), iconos.SITIO)
-        sitio.setToolTip(pieza.url)
-        conectar(sitio.clicked, lambda: QDesktopServices.openUrl(QUrl(pieza.url)))
+        sitio.setToolTip(ficha_datos.url)
+        conectar(sitio.clicked,
+                 lambda: QDesktopServices.openUrl(QUrl(ficha_datos.url)))
         extras.append(sitio)
 
     aplicar = None
@@ -263,7 +329,7 @@ def dialogo_pack(
 
     cerrar = boton("Cerrar")
     dialogo = Dialogo(
-        pieza.nombre, ficha,
+        ficha_datos.nombre, ficha,
         Acciones(confirmar=aplicar, cancelar=cerrar, extras=extras or None),
         parent,
     )

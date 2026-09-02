@@ -13,10 +13,12 @@ from mcpemod.core.version import EstadoVersion
 from mcpemod.ui import iconos
 from mcpemod.ui.estilo import AMBAR, GRIS, SOBRE_POZO, TEXTO_SECUNDARIO, VERDE
 from mcpemod.ui.widgets.badge import badge
+from mcpemod.ui.widgets.miniatura import Miniatura
 
 
 class TarjetaActualizacion(QWidget):
     actualizar_pedido = Signal(object)
+    abrir = Signal(object)
 
     def __init__(self, resultado: Resultado, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -25,12 +27,21 @@ class TarjetaActualizacion(QWidget):
         raiz = QVBoxLayout(self)
         raiz.setContentsMargins(0, 0, 0, 0)
         raiz.addWidget(Pozo(self._contenido()))
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def mouseReleaseEvent(self, evento) -> None:  # noqa: N802 (API de Qt)
+        if evento.button() == Qt.MouseButton.LeftButton:
+            self.abrir.emit(self._r.pieza)
+        super().mouseReleaseEvent(evento)
 
     def _contenido(self) -> QWidget:
         contenedor = QWidget()
         layout = QHBoxLayout(contenedor)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(GAP_CELDA)
+
+        layout.addWidget(Miniatura(self._r.pieza),
+                         alignment=Qt.AlignmentFlag.AlignVCenter)
 
         info = QVBoxLayout()
         info.setSpacing(GAP_CELDA // 4)

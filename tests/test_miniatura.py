@@ -106,3 +106,48 @@ def test_un_manifiesto_ilegible_deja_la_ficha_sin_datos(tmp_path):
     carpeta.mkdir()
     (carpeta / "manifest.json").write_text("{ esto no es json")
     assert manifiesto_de(_pieza(carpeta)) is None
+
+
+# ── La portada de algo que todavía no está instalado ─────────────────────────
+
+def test_cada_pack_de_un_mcaddon_lleva_su_propia_portada(tmp_path):
+    """Un `.mcaddon` trae el pack de recursos y el de comportamiento, y cada uno
+    tiene su cara. Coger la primera que aparezca les pondría la misma."""
+    from mcpemod.core.miniatura import de_ruta
+
+    rp = escribir_zip(tmp_path / "rp.mcpack", {
+        "manifest.json": json.dumps(manifiesto(tipo="resources")),
+        "pack_icon.png": b"PORTADA-RP",
+    })
+    bp = escribir_zip(tmp_path / "bp.mcpack", {
+        "manifest.json": json.dumps(manifiesto(tipo="data")),
+        "pack_icon.png": b"PORTADA-BP",
+    })
+    addon = escribir_zip(tmp_path / "todo.mcaddon", {
+        "rp.mcpack": rp.read_bytes(), "bp.mcpack": bp.read_bytes(),
+    })
+
+    assert de_ruta(addon, anidado_en="rp.mcpack") == b"PORTADA-RP"
+    assert de_ruta(addon, anidado_en="bp.mcpack") == b"PORTADA-BP"
+
+
+def test_el_prefijo_acota_donde_se_busca(tmp_path):
+    """Con prefijo se busca solo ahí: si no, el segundo pack de un zip heredaría
+    la portada del primero."""
+    from mcpemod.core.miniatura import de_ruta
+
+    archivo = escribir_zip(tmp_path / "dos.zip", {
+        "uno/manifest.json": "{}", "uno/pack_icon.png": b"UNO",
+        "dos/manifest.json": "{}", "dos/pack_icon.png": b"DOS",
+    })
+    assert de_ruta(archivo, prefijo="uno/") == b"UNO"
+    assert de_ruta(archivo, prefijo="dos/") == b"DOS"
+
+
+def test_un_mcpack_de_descargas_da_su_portada_sin_extraerlo(tmp_path):
+    from mcpemod.core.miniatura import de_ruta
+
+    archivo = escribir_zip(tmp_path / "x.mcpack", {
+        "manifest.json": json.dumps(manifiesto()), "pack_icon.png": PNG,
+    })
+    assert de_ruta(archivo) == PNG

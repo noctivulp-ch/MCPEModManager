@@ -12,6 +12,7 @@ Se busca en la raíz del pack y también un nivel más abajo, porque un pack
 
 from __future__ import annotations
 
+import io
 import zipfile
 from pathlib import Path
 
@@ -27,12 +28,32 @@ MAXIMO = 4 * 1024 * 1024
 
 
 def leer(pieza: Instalado) -> bytes | None:
-    """Los bytes de la portada, o `None` si el pack no trae ninguna."""
+    """Los bytes de la portada de un pack ya instalado, o `None`."""
+    return de_ruta(pieza.ruta, empaquetado=pieza.forma is Forma.EMPAQUETADO)
+
+
+def de_ruta(ruta: Path, prefijo: str = "", anidado_en: str | None = None,
+            empaquetado: bool = False) -> bytes | None:
+    """La portada de un pack que todavía no está instalado.
+
+    Es la de un archivo de la carpeta de descargas, así que hay que decir **dónde
+    mirar dentro**: un `.mcaddon` es un zip de `.mcpack`, y el pack que interesa
+    puede estar a dos niveles de profundidad. `prefijo` es la carpeta dentro del
+    zip y `anidado_en` el `.mcpack` interno, los mismos que trae cada
+    `Componente` para poder extraerse.
+    """
     try:
-        if pieza.forma is Forma.EMPAQUETADO:
-            return _del_zip(pieza.ruta)
-        return _de_carpeta(pieza.ruta)
-    except (OSError, zipfile.BadZipFile, KeyError):
+        if anidado_en:
+            with zipfile.ZipFile(ruta) as fuera:
+                with fuera.open(anidado_en) as crudo:
+                    return _del_zip_abierto(
+                        zipfile.ZipFile(io.BytesIO(crudo.read())), prefijo
+                    )
+        if empaquetado or (ruta.is_file() and zipfile.is_zipfile(ruta)):
+            with zipfile.ZipFile(ruta) as zf:
+                return _del_zip_abierto(zf, prefijo)
+        return _de_carpeta(ruta)
+    except (OSError, zipfile.BadZipFile, KeyError, ValueError):
         # Un pack sin portada legible se enseña sin ella. No es un fallo que
         # merezca interrumpir el listado entero.
         return None
@@ -46,18 +67,25 @@ def _de_carpeta(carpeta: Path) -> bytes | None:
     return None
 
 
-def _del_zip(archivo: Path) -> bytes | None:
-    with zipfile.ZipFile(archivo) as zf:
-        candidatos = [
-            n for n in zf.namelist()
-            for nombre in NOMBRES
-            if n == nombre or (n.endswith("/" + nombre) and n.count("/") == 1)
-        ]
-        # La de la raíz antes que la de una subcarpeta: un pack anidado puede
-        # traer las dos, y la de fuera es la del pack entero.
-        for nombre in sorted(candidatos, key=lambda n: n.count("/")):
-            if zf.getinfo(nombre).file_size <= MAXIMO:
-                return zf.read(nombre)
+def _del_zip_abierto(zf: zipfile.ZipFile, prefijo: str = "") -> bytes | None:
+    """La portada dentro de un zip, buscando bajo `prefijo`.
+
+    Con prefijo se busca **solo ahí**: un `.mcaddon` trae la portada de cada pack
+    en su carpeta, y coger la primera que aparezca le pondría al pack de
+    comportamiento la cara del de recursos.
+    """
+    dentro = [n for n in zf.namelist() if n.startswith(prefijo)]
+    candidatos = [
+        n for n in dentro
+        for nombre in NOMBRES
+        if n[len(prefijo):] == nombre
+        or (n.endswith("/" + nombre) and n[len(prefijo):].count("/") == 1)
+    ]
+    # La menos profunda antes: un pack anidado puede traer las dos, y la de fuera
+    # es la del pack entero.
+    for nombre in sorted(candidatos, key=lambda n: n.count("/")):
+        if zf.getinfo(nombre).file_size <= MAXIMO:
+            return zf.read(nombre)
     return None
 
 

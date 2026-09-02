@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QWidget
 
 from mcpemod.core import Analisis, ErrorInstalacion, Installer, Scanner
 from mcpemod.senales import conectar
+from mcpemod.ui.dialogo_pack import de_componente, dialogo_pack
 from mcpemod.ui.panel_lista import PanelLista
 from mcpemod.ui.widgets import BarraCarpetas, TarjetaDescarga
 
@@ -49,8 +50,19 @@ class PanelDescargas(PanelLista):
                 mostrar_carpeta=varias,
             )
             conectar(tarjeta.instalar_pedido, self._instalar)
+            # La ruta se captura por valor: `a` cambia en cada vuelta del bucle.
+            conectar(tarjeta.abrir, lambda c, ruta=a.ruta: self._ficha(ruta, c))
             tarjetas.append(tarjeta)
         self._poner(tarjetas)
+
+    def _ficha(self, ruta, componente) -> None:
+        """La ficha de un pack que todavía no está instalado.
+
+        Sin ámbito: las variantes se enseñan pero no se eligen, porque la
+        elección se guarda en la entrada de activación y este pack no tiene
+        ninguna todavía.
+        """
+        dialogo_pack(de_componente(ruta, componente), parent=self.window()).exec()
 
     def marcar_vistas(self) -> None:
         """El badge NEW se apaga al mirar la pestaña, no al escanear la carpeta.

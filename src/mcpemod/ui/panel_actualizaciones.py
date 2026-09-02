@@ -21,6 +21,8 @@ from mcpemod.ui.estilo import TEXTO_SECUNDARIO
 from mcpemod.ui.panel_lista import PanelLista
 from mcpemod.ui.tareas import Tarea
 from mcpemod.ui.trabajo import comprobar_todos, instalar_publicado
+from mcpemod.core.miniatura import manifiesto_de
+from mcpemod.ui.dialogo_pack import de_instalado, dialogo_pack
 from mcpemod.ui.widgets import TarjetaActualizacion
 
 _VACIO = (
@@ -273,6 +275,7 @@ class PanelActualizaciones(PanelLista):
         for resultado in ordenados:
             tarjeta = TarjetaActualizacion(resultado)
             conectar(tarjeta.actualizar_pedido, self._actualizar)
+            conectar(tarjeta.abrir, self._ficha)
             tarjetas.append(tarjeta)
         self._poner(tarjetas)
 
@@ -281,6 +284,12 @@ class PanelActualizaciones(PanelLista):
         self._btn_todo.setVisible(cuantas > 1 and not self._tarea.corriendo)
 
     # ── Actualizar ────────────────────────────────────────────────────────────
+
+    def _ficha(self, pieza) -> None:
+        """La ficha del pack instalado, no la del publicado: lo que se compara
+        aquí es contra lo que hay puesto."""
+        dialogo_pack(de_instalado(pieza, manifiesto_de(pieza)),
+                     parent=self.window()).exec()
 
     def _actualizar(self, resultado: Resultado) -> None:
         """Descarga la versión publicada y la instala encima de la que hay.

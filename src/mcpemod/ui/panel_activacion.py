@@ -30,7 +30,7 @@ from mcpemod.senales import conectar
 from mcpemod.ui import iconos
 from mcpemod.ui.estilo import SOBRE_BANDEJA, TEXTO_SECUNDARIO
 from mcpemod.core.miniatura import manifiesto_de
-from mcpemod.ui.dialogo_pack import dialogo_pack
+from mcpemod.ui.dialogo_pack import de_instalado, dialogo_pack
 from mcpemod.ui.widgets import ColumnaPacks
 from mcpemod.ui.widgets.arrastre import Arrastre
 
@@ -286,7 +286,8 @@ class PanelActivacion(QWidget):
         dentro de la entrada de activación, así que sin entrada no hay dónde.
         """
         dialogo = dialogo_pack(
-            pieza, manifiesto_de(pieza), self._ambito, activo, parent=self.window()
+            de_instalado(pieza, manifiesto_de(pieza)),
+            self._ambito, activo, parent=self.window(),
         )
         if dialogo.exec() and activo:
             self._refrescar_gestion()

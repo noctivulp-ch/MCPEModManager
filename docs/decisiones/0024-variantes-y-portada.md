@@ -81,7 +81,25 @@ la misma regla que a `QCheckBox`, con el mismo `border-radius`. Se corrige en el
 diálogo, pero el sitio de arreglarlo es la librería — una casilla marca varias
 cosas y un radio elige una, y con la misma forma no se distinguen.
 
+**En las cuatro pestañas, no en dos.** Instalado, Activación, Actualizaciones y
+Carpetas enseñan lo mismo —un pack— y la portada y la ficha valen igual en las
+cuatro. En Carpetas hay un matiz: un `.mcaddon` trae varios packs y **cada uno
+lleva su propia portada**, así que va en la fila del componente y no en la
+cabecera del archivo. Ponerle a los dos la primera que apareciera sería enseñar
+una cara falsa.
+
+Un pack de la carpeta de descargas no está instalado, así que **enseña sus
+variantes pero no deja elegirlas**: la elección se guarda dentro de la entrada de
+activación y no tiene ninguna. Eso no se decide en la pantalla sino en los datos
+—`Ficha.pieza` en `None`—, para que no dependa de acordarse de pasar el ámbito.
+
 ## Alternativas descartadas
+
+**Fabricar un `Instalado` falso para los archivos de descargas.** Habría
+reaprovechado la ficha en dos líneas, y habría hecho parecer instalado a un
+archivo en cuanto alguien pasara ese objeto a otra función. La ficha consume una
+`Ficha` —los datos de presentación— y solo lo que sí está instalado trae `pieza`.
+
 
 **Un desplegable en vez de opciones a la vista.** Ocupa menos, pero elegir una
 variante es justo el momento en que se quieren ver todas: «Rare / Common / Normal

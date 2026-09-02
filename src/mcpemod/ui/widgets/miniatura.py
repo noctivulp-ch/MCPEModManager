@@ -22,7 +22,11 @@ from mcpemod.core.mod import Instalado
 from mcpemod.ui import iconos
 from mcpemod.ui.estilo import TEXTO_SECUNDARIO
 
-#: En la fila de una lista y en la cabecera del detalle.
+#: En la fila de una lista, en una línea secundaria dentro de otra tarjeta, y en
+#: la cabecera de la ficha. La menuda no es por ahorrar sitio: en la fila de un
+#: componente el texto es de 11 px, y una portada de 34 pesa más que el nombre
+#: del archivo que la contiene.
+MENUDA = 24
 CHICA = 34
 GRANDE = 72
 
@@ -44,12 +48,23 @@ def _sin_suavizar(datos: bytes, lado: int) -> QPixmap | None:
 
 
 def pixmap_de(pieza: Instalado, lado: int = CHICA) -> QPixmap:
-    """La portada del pack, o un marcador si no trae ninguna."""
-    clave = (str(pieza.ruta), lado)
+    """La portada de un pack instalado, o un marcador si no trae ninguna."""
+    return pixmap_bytes(str(pieza.ruta), lambda: leer(pieza), lado)
+
+
+def pixmap_bytes(clave_cache: str, obtener, lado: int = CHICA) -> QPixmap:
+    """Lo mismo, para una portada que no sale de una pieza instalada.
+
+    `obtener` es una función y no los bytes: la portada de un archivo de
+    descargas hay que sacarla de dentro de un zip, y con cuarenta filas en
+    pantalla eso son cuarenta zips abiertos por cada repintado. Así solo se abre
+    el que no esté guardado ya.
+    """
+    clave = (clave_cache, lado)
     if clave in _cache:
         return _cache[clave]
 
-    datos = leer(pieza)
+    datos = obtener()
     px = _sin_suavizar(datos, lado) if datos else None
     if px is None or px.isNull():
         px = _marcador(lado)
@@ -78,9 +93,23 @@ class Miniatura(QLabel):
     def __init__(self, pieza: Instalado, lado: int = CHICA,
                  parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setFixedSize(lado, lado)
-        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _preparar(self, lado)
         self.setPixmap(pixmap_de(pieza, lado))
+
+
+class MiniaturaDe(QLabel):
+    """La de algo que todavía no está instalado: un archivo de descargas."""
+
+    def __init__(self, clave: str, obtener, lado: int = CHICA,
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        _preparar(self, lado)
+        self.setPixmap(pixmap_bytes(clave, obtener, lado))
+
+
+def _preparar(etiqueta: QLabel, lado: int) -> None:
+    etiqueta.setFixedSize(lado, lado)
+    etiqueta.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
 
 def olvidar() -> None:

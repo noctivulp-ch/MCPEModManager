@@ -18,7 +18,10 @@ from mcpemod.ui import iconos
 from mcpemod.ui.estilo import (
     AMBAR, COLOR_CATEGORIA, GRIS, SOBRE_POZO, TEXTO_SECUNDARIO, VERDE,
 )
+from mcpemod.core.miniatura import de_ruta
+from mcpemod.senales import conectar
 from mcpemod.ui.widgets.badge import badge
+from mcpemod.ui.widgets.miniatura import MENUDA, MiniaturaDe
 
 _ETIQUETA_ESTADO = {
     EstadoVersion.NUEVA: ("↑ actualización", AMBAR),
@@ -27,8 +30,58 @@ _ETIQUETA_ESTADO = {
 }
 
 
+class FilaComponente(QWidget):
+    """Uno de los packs que trae el archivo, con su portada y su estado.
+
+    Cada uno lleva la suya y no la del archivo: un `.mcaddon` trae el pack de
+    recursos y el de comportamiento, y cada uno tiene su propia cara. Ponerle a
+    los dos la primera que apareciera sería enseñar una portada falsa.
+    """
+
+    abrir = Signal(object)
+
+    def __init__(self, ruta, componente: Componente,
+                 estado: EstadoVersion | None, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._componente = componente
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        fila = QHBoxLayout(self)
+        fila.setSpacing(GAP_CELDA // 2)
+        fila.setContentsMargins(GAP_CELDA // 2, 0, 0, 0)
+
+        fila.addWidget(MiniaturaDe(
+            f"{ruta}|{componente.prefijo}|{componente.anidado_en}",
+            lambda: de_ruta(ruta, componente.prefijo, componente.anidado_en),
+            MENUDA,
+        ))
+
+        categoria = componente.categoria
+        fila.addWidget(badge(categoria.etiqueta,
+                             COLOR_CATEGORIA.get(categoria.value, GRIS)))
+
+        texto = componente.nombre
+        if componente.version:
+            texto += f"  v{componente.version}"
+        lbl = QLabel(texto)
+        lbl.setStyleSheet(f"color: {TEXTO_SECUNDARIO}; font-size: 11px;")
+        fila.addWidget(lbl)
+
+        etiqueta = _ETIQUETA_ESTADO.get(estado)
+        if etiqueta:
+            fila.addWidget(badge(*etiqueta))
+        fila.addStretch()
+
+    def mouseReleaseEvent(self, evento) -> None:  # noqa: N802 (API de Qt)
+        if evento.button() == Qt.MouseButton.LeftButton:
+            self.abrir.emit(self._componente)
+        super().mouseReleaseEvent(evento)
+
+
 class TarjetaDescarga(QWidget):
     instalar_pedido = Signal(object)
+    #: Se ha pulsado uno de los packs del archivo: se pide su ficha.
+    abrir = Signal(object)
 
     def __init__(
         self,
@@ -58,7 +111,11 @@ class TarjetaDescarga(QWidget):
         info.setSpacing(GAP_CELDA // 4)
         info.addLayout(self._fila_titulo())
         for componente in self._analisis.componentes:
-            info.addLayout(self._fila_componente(componente))
+            fila = FilaComponente(
+                self._analisis.ruta, componente, self._estado(componente)
+            )
+            conectar(fila.abrir, lambda c: self.abrir.emit(c))
+            info.addWidget(fila)
         layout.addLayout(info, stretch=1)
 
         layout.addLayout(self._fila_acciones())
@@ -79,28 +136,6 @@ class TarjetaDescarga(QWidget):
             lbl = QLabel(str(self._analisis.ruta.parent))
             lbl.setStyleSheet(f"color: {TEXTO_SECUNDARIO}; font-size: 10px;")
             fila.addWidget(lbl)
-        return fila
-
-    def _fila_componente(self, componente: Componente) -> QHBoxLayout:
-        fila = QHBoxLayout()
-        fila.setSpacing(GAP_CELDA // 2)
-        fila.setContentsMargins(GAP_CELDA // 2, 0, 0, 0)
-
-        categoria = componente.categoria
-        fila.addWidget(badge(categoria.etiqueta, COLOR_CATEGORIA.get(categoria.value, GRIS)))
-
-        texto = componente.nombre
-        if componente.version:
-            texto += f"  v{componente.version}"
-        lbl = QLabel(texto)
-        lbl.setStyleSheet(f"color: {TEXTO_SECUNDARIO}; font-size: 11px;")
-        fila.addWidget(lbl)
-
-        etiqueta = _ETIQUETA_ESTADO.get(self._estado(componente))
-        if etiqueta:
-            fila.addWidget(badge(*etiqueta))
-
-        fila.addStretch()
         return fila
 
     def _estado(self, componente: Componente) -> EstadoVersion | None:
