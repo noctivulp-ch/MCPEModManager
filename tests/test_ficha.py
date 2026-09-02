@@ -109,3 +109,96 @@ def test_un_pack_sin_manifiesto_legible_abre_la_ficha_igual(qt_app, instalacion)
     pieza = _instalado(instalacion)
     ficha = FichaPack(de_instalado(pieza, None))
     assert not ficha.hay_variantes_que_guardar
+
+
+# ── Dónde se puede pulsar una tarjeta de la carpeta de descargas ─────────────
+
+def _tarjeta(tmp_path, packs):
+    """Una tarjeta de descargas con uno o varios packs dentro."""
+    from mcpemod.ui.widgets import TarjetaDescarga
+
+    if len(packs) == 1:
+        archivo = escribir_zip(tmp_path / "x.mcpack", {
+            "manifest.json": json.dumps(manifiesto(**packs[0])),
+        })
+    else:
+        dentro = {}
+        for i, p in enumerate(packs):
+            interno = escribir_zip(tmp_path / f"i{i}.mcpack", {
+                "manifest.json": json.dumps(manifiesto(**p)),
+            })
+            dentro[f"i{i}.mcpack"] = interno.read_bytes()
+        archivo = escribir_zip(tmp_path / "x.mcaddon", dentro)
+    return TarjetaDescarga(analizar(archivo), {})
+
+
+def _pulsar(widget):
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+
+    widget.mouseReleaseEvent(QMouseEvent(
+        QEvent.Type.MouseButtonRelease, QPointF(1, 1), QPointF(1, 1),
+        Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    ))
+
+
+def test_con_un_solo_pack_toda_la_tarjeta_lleva_a_su_ficha(qt_app, tmp_path):
+    """Incluida la cabecera: ahí el nombre del archivo y el del pack son la misma
+    cosa, y media tarjeta muerta se nota al usarla."""
+    tarjeta = _tarjeta(tmp_path, [dict(nombre="Uno")])
+    recibido = []
+    tarjeta.abrir.connect(recibido.append)
+
+    _pulsar(tarjeta)
+
+    assert len(recibido) == 1
+
+
+def test_pulsar_la_fila_no_abre_la_ficha_dos_veces(qt_app, tmp_path):
+    """Con un solo pack la tarjeta también escucha, y el evento de la fila subía
+    hasta ella."""
+    from mcpemod.ui.widgets.tarjeta_descarga import FilaComponente
+
+    tarjeta = _tarjeta(tmp_path, [dict(nombre="Uno")])
+    recibido = []
+    tarjeta.abrir.connect(recibido.append)
+
+    _pulsar(tarjeta.findChildren(FilaComponente)[0])
+
+    assert len(recibido) == 1
+
+
+def test_con_varios_packs_la_cabecera_no_abre_nada(qt_app, tmp_path):
+    """El título es del archivo, no de ninguno de los packs: abrir «el primero»
+    sería elegir por el usuario sin decírselo."""
+    tarjeta = _tarjeta(tmp_path, [
+        dict(nombre="RP", tipo="resources",
+             uuid="aaaaaaaa-1111-1111-1111-111111111111"),
+        dict(nombre="BP", tipo="data",
+             uuid="bbbbbbbb-2222-2222-2222-222222222222"),
+    ])
+    recibido = []
+    tarjeta.abrir.connect(recibido.append)
+
+    _pulsar(tarjeta)
+
+    assert recibido == []
+
+
+def test_con_varios_packs_cada_fila_abre_el_suyo(qt_app, tmp_path):
+    from mcpemod.ui.widgets.tarjeta_descarga import FilaComponente
+
+    tarjeta = _tarjeta(tmp_path, [
+        dict(nombre="RP", tipo="resources",
+             uuid="aaaaaaaa-1111-1111-1111-111111111111"),
+        dict(nombre="BP", tipo="data",
+             uuid="bbbbbbbb-2222-2222-2222-222222222222"),
+    ])
+    recibido = []
+    tarjeta.abrir.connect(recibido.append)
+
+    for fila in tarjeta.findChildren(FilaComponente):
+        _pulsar(fila)
+
+    assert sorted(c.nombre for c in recibido) == ["BP", "RP"]

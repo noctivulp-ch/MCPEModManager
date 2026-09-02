@@ -75,6 +75,10 @@ class FilaComponente(QWidget):
     def mouseReleaseEvent(self, evento) -> None:  # noqa: N802 (API de Qt)
         if evento.button() == Qt.MouseButton.LeftButton:
             self.abrir.emit(self._componente)
+            # Aceptado y no propagado: con un solo pack la tarjeta también
+            # escucha, y dejarlo subir abriría dos veces la misma ficha.
+            evento.accept()
+            return
         super().mouseReleaseEvent(evento)
 
 
@@ -100,6 +104,19 @@ class TarjetaDescarga(QWidget):
         raiz = QVBoxLayout(self)
         raiz.setContentsMargins(0, 0, 0, 0)
         raiz.addWidget(Pozo(self._contenido()))
+
+        # Con un solo pack la tarjeta entera lleva a su ficha, cabecera incluida:
+        # ahí el nombre del archivo y el del pack son la misma cosa. Con varios
+        # no, porque el título es del archivo y no de ninguno de ellos — y el
+        # cursor lo dice: solo las filas cambian a mano.
+        if len(analisis.componentes) == 1:
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def mouseReleaseEvent(self, evento) -> None:  # noqa: N802 (API de Qt)
+        componentes = self._analisis.componentes
+        if evento.button() == Qt.MouseButton.LeftButton and len(componentes) == 1:
+            self.abrir.emit(componentes[0])
+        super().mouseReleaseEvent(evento)
 
     def _contenido(self) -> QWidget:
         contenedor = QWidget()
