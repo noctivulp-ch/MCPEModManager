@@ -37,6 +37,7 @@ from mcpemod.ui.estilo import (
 from mcpemod.ui.widgets.arrastre import UMBRAL
 from mcpemod.ui.widgets.badge import badge
 from mcpemod.ui.widgets.lista_por_categoria import agrupar, cabecera
+from mcpemod.ui.widgets.miniatura import Miniatura
 
 
 class NombreElidido(QLabel):
@@ -140,6 +141,8 @@ class FilaPack(QWidget):
     """Un pack dentro de una columna, con lo que se puede hacerle desde ahí."""
 
     accion = Signal(object, str)   # pieza, "activar" | "desactivar" | "subir" | "bajar"
+    #: Se ha pulsado la fila: se pide su ficha.
+    abrir = Signal(object)
 
     def __init__(
         self,
@@ -161,6 +164,16 @@ class FilaPack(QWidget):
     def pieza(self) -> Instalado:
         return self._pieza
 
+    def mouseReleaseEvent(self, evento: QMouseEvent) -> None:  # noqa: N802 (API de Qt)
+        """Pulsar la fila abre su ficha.
+
+        No choca con arrastrar: eso solo empieza desde el asa, que se come sus
+        propios eventos de ratón y nunca llegan aquí.
+        """
+        if evento.button() == Qt.MouseButton.LeftButton:
+            self.abrir.emit(self._pieza)
+        super().mouseReleaseEvent(evento)
+
     def _contenido(self) -> QWidget:
         contenedor = QWidget()
         fila = QHBoxLayout(contenedor)
@@ -169,6 +182,7 @@ class FilaPack(QWidget):
 
         if self._pieza.uuid:
             fila.addWidget(Asa(contenedor))
+        fila.addWidget(Miniatura(self._pieza))
 
         info = QVBoxLayout()
         info.setSpacing(2)
@@ -252,6 +266,7 @@ class ColumnaPacks(QWidget):
     accion = Signal(object, str)
     #: uuid del pack soltado y en qué posición de esta columna cayó.
     soltado = Signal(str, int)
+    abrir = Signal(object)
 
     def __init__(self, titulo: str, vacio: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -394,6 +409,7 @@ class ColumnaPacks(QWidget):
         def fila(pieza: Instalado) -> QWidget:
             f = FilaPack(pieza, activo, desfases.get(pieza.uuid))
             conectar(f.accion, lambda p, q: self.accion.emit(p, q))
+            conectar(f.abrir, lambda p: self.abrir.emit(p))
             self._filas.append(f)
             return f
 

@@ -25,7 +25,7 @@ import json
 import os
 import shutil
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .contenido import Categoria
@@ -159,6 +159,39 @@ class Ambito:
     def desactivar(self, pieza: Instalado) -> None:
         archivo = self.archivo_de(self._categoria_de(pieza))
         escribir(archivo, [r for r in leer(archivo) if r.uuid != pieza.uuid])
+
+    def elegir_subpack(self, pieza: Instalado, subpack: str | None) -> None:
+        """Cambia qué variante del pack se aplica, sin moverlo de sitio.
+
+        No es activar de nuevo con otra variante: eso lo mandaría al final de la
+        lista y el orden es lo que decide cuál gana cuando dos packs tocan lo
+        mismo. Aquí solo cambia el campo.
+
+        Con `None` se quita la elección, que **no es dejarlo sin variante**: la
+        documentación dice que sin ella el juego coge sola *«the highest
+        memory_performance_tier value that doesn't exceed the tier of the
+        player's device»*. Es devolverle la decisión al juego.
+        """
+        categoria = self._categoria_de(pieza)
+        archivo = self.archivo_de(categoria)
+        referencias = leer(archivo)
+        if not any(r.uuid == pieza.uuid for r in referencias):
+            raise ErrorActivacion(
+                f"«{pieza.nombre}» no está activo en {self.nombre.lower()}: "
+                "no hay ninguna variante que cambiar"
+            )
+        escribir(archivo, [
+            replace(r, subpack=subpack) if r.uuid == pieza.uuid else r
+            for r in referencias
+        ])
+
+    def subpack_de(self, pieza: Instalado) -> str | None:
+        """Qué variante tiene elegida, si tiene alguna."""
+        for categoria in self.categorias:
+            for r in self.activos(categoria):
+                if r.uuid == pieza.uuid:
+                    return r.subpack
+        return None
 
     def reordenar(self, categoria: Categoria, uuids: list[str]) -> None:
         """Deja los activos en el orden dado. El último gana."""

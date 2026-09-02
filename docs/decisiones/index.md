@@ -21,3 +21,4 @@
 | [0021](0021-clave-de-curseforge.md) | La clave de CurseForge la pone el usuario | Aceptada |
 | [0022](0022-migracion-de-esquema.md) | Las columnas nuevas se añaden a las bases que ya existen | Aceptada |
 | [0023](0023-iconos.md) | Los iconos dicen la acción, y las flechas dicen el movimiento | Aceptada |
+| [0024](0024-variantes-y-portada.md) | Las variantes son las opciones del pack, y la portada lo identifica | Aceptada |

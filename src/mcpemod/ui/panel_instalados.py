@@ -5,7 +5,9 @@ from __future__ import annotations
 from PySide6.QtWidgets import QWidget
 
 from mcpemod.core import ErrorInstalacion, Installer, Instalado, Scanner
+from mcpemod.core.miniatura import manifiesto_de
 from mcpemod.senales import conectar
+from mcpemod.ui.dialogo_pack import dialogo_pack
 from mcpemod.ui.panel_lista import PanelLista
 from mcpemod.ui.widgets import TarjetaInstalado, agrupar, cabecera
 
@@ -36,8 +38,14 @@ class PanelInstalados(PanelLista):
                 tarjeta = TarjetaInstalado(pieza)
                 conectar(tarjeta.desinstalar_pedido, self._desinstalar)
                 conectar(tarjeta.normalizar_pedido, self._normalizar)
+                conectar(tarjeta.abrir, self._ficha)
                 widgets.append(tarjeta)
         self._poner(widgets)
+
+    def _ficha(self, pieza: Instalado) -> None:
+        """La ficha del pack. Sin ámbito: aquí no se activa nada, así que las
+        variantes se enseñan pero no se pueden elegir — eso es de activación."""
+        dialogo_pack(pieza, manifiesto_de(pieza), parent=self.window()).exec()
 
     def _desinstalar(self, pieza: Instalado) -> None:
         try:

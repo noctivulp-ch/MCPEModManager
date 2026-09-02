@@ -29,6 +29,8 @@ from mcpemod.core.respaldo_mundo import ErrorRespaldo, existente, guardar, resta
 from mcpemod.senales import conectar
 from mcpemod.ui import iconos
 from mcpemod.ui.estilo import SOBRE_BANDEJA, TEXTO_SECUNDARIO
+from mcpemod.core.miniatura import manifiesto_de
+from mcpemod.ui.dialogo_pack import dialogo_pack
 from mcpemod.ui.widgets import ColumnaPacks
 from mcpemod.ui.widgets.arrastre import Arrastre
 
@@ -171,6 +173,8 @@ class PanelActivacion(QWidget):
         self._activos = ColumnaPacks("Aplicados", "Ninguno activo todavía.")
         conectar(self._inactivos.accion, self._al_pedir)
         conectar(self._activos.accion, self._al_pedir)
+        conectar(self._inactivos.abrir, lambda p: self._ficha(p, activo=False))
+        conectar(self._activos.abrir, lambda p: self._ficha(p, activo=True))
         conectar(self._inactivos.soltado, lambda u, i: self._al_soltar(u, i, activar=False))
         conectar(self._activos.soltado, lambda u, i: self._al_soltar(u, i, activar=True))
 
@@ -274,6 +278,18 @@ class PanelActivacion(QWidget):
             return
 
         self._refrescar_gestion()
+
+    def _ficha(self, pieza: Instalado, activo: bool) -> None:
+        """La ficha del pack, con su ámbito: es donde se elige la variante.
+
+        Solo con el pack ya aplicado se puede elegir — la variante se guarda
+        dentro de la entrada de activación, así que sin entrada no hay dónde.
+        """
+        dialogo = dialogo_pack(
+            pieza, manifiesto_de(pieza), self._ambito, activo, parent=self.window()
+        )
+        if dialogo.exec() and activo:
+            self._refrescar_gestion()
 
     def _al_soltar(self, uuid: str, posicion: int, activar: bool) -> None:
         """Un pack soltado en una columna: la columna dice qué significa.

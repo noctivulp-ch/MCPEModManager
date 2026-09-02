@@ -24,6 +24,7 @@ MAGIA_CONTENTS = b"\xfc\xb9\xcf\x9b"
 _COMENTARIOS = re.compile(r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*.*?\*/', re.DOTALL)
 _COMAS_COLGANTES = re.compile(r",(\s*[}\]])")
 _CODIGOS_COLOR = re.compile(r"§.")
+_PRIVADOS = re.compile(r"[\ue000-\uf8ff]")
 _CLAVE_LOCALIZADA = re.compile(r"^[\w.]+\.name$")
 
 #: `modules[].type` → clase de contenido. Es lo único que el pack declara sobre
@@ -37,6 +38,30 @@ TIPOS_CONOCIDOS = TIPOS_RECURSO | TIPOS_COMPORTAMIENTO | TIPOS_SKIN | TIPOS_PLAN
 
 class ManifiestoInvalido(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class Subpack:
+    """Una variante del pack entre las que el jugador elige.
+
+    La documentación oficial las describe como lo que son: *«sub-packs let
+    players choose between different variations of a resource pack and switch
+    between them at any time»*. No son packs aparte — son las **opciones** de
+    este: hojas redondas o normales, con efectos o sin ellos, qué tan raras
+    aparecen unas estructuras.
+
+    `carpeta` es lo que se escribe en el archivo de activación y `nombre` lo que
+    se le enseña a quien elige —*«the name players see when choosing your
+    sub-pack»*—. No son lo mismo y confundirlos activa un subpack que no existe:
+    en un pack de este equipo la carpeta es `with_vfx` y el nombre «With VFX
+    effect».
+    """
+
+    carpeta: str
+    nombre: str
+    #: RAM mínima que pide, en tramos de 250 MB. El juego elige solo el más alto
+    #: que quepa en el aparato, así que **no elegir no es no tener ninguno**.
+    memoria: int | None = None
 
 
 @dataclass(frozen=True)
@@ -54,6 +79,13 @@ class Manifiesto:
     #: apunta directo a la publicación y ahorra tener que adivinar cuál es.
     url: str = ""
     licencia: str = ""
+    #: Lo que el juego enseña bajo el nombre del pack.
+    descripcion: str = ""
+    subpacks: tuple[Subpack, ...] = field(default=())
+    #: Los párrafos sueltos de `settings`, que la documentación describe como
+    #: *«a description of what the pack and sub-packs include»*. Es donde algunos
+    #: autores explican qué hace cada variante y qué hay que hacer para cambiarla.
+    notas: tuple[str, ...] = field(default=())
 
     @property
     def es_bedrock(self) -> bool:
@@ -89,8 +121,15 @@ def cargar_json(datos: bytes) -> dict:
 
 
 def limpiar_formato(texto: str) -> str:
-    """Quita los códigos `§x` con que los autores colorean el nombre del pack."""
-    return _CODIGOS_COLOR.sub("", texto).strip()
+    """Quita lo que solo tiene sentido dentro del juego.
+
+    Los códigos `§x` con que los autores colorean el nombre, y los caracteres del
+    **Área de Uso Privado** (U+E000–U+F8FF): son los glifos de la fuente de
+    Minecraft —iconos de corazón, de comida, de escudo— y ahí dibujan algo, pero
+    en cualquier otra fuente son cajas vacías. Un pack de este equipo llama a sus
+    variantes `\uf14d Monochrome Icons`, y esa caja no aporta nada a quien elige.
+    """
+    return _PRIVADOS.sub("", _CODIGOS_COLOR.sub("", texto)).strip()
 
 
 def _version_a_texto(valor) -> str | None:
@@ -140,7 +179,48 @@ def desde_datos(datos: bytes, leer_lang=None) -> Manifiesto:
         ),
         url=str((datos_json.get("metadata") or {}).get("url") or "").strip(),
         licencia=str((datos_json.get("metadata") or {}).get("license") or "").strip(),
+        descripcion=_texto_localizado(header.get("description"), leer_lang),
+        subpacks=_subpacks(datos_json.get("subpacks"), leer_lang),
+        notas=tuple(
+            limpio
+            for s in datos_json.get("settings") or []
+            if isinstance(s, dict) and s.get("type") == "label"
+            and (limpio := limpiar_formato(str(s.get("text", ""))).strip())
+        ),
     )
+
+
+def _texto_localizado(valor, leer_lang) -> str:
+    """Un texto del manifiesto, resolviendo la clave si es una.
+
+    La descripción admite lo mismo que el nombre: en vez del texto, la clave de
+    un `.lang`. Sin resolverla se le enseña al usuario `pack.description`.
+    """
+    texto = limpiar_formato(str(valor or "")).strip()
+    if _CLAVE_LOCALIZADA.match(texto) and leer_lang is not None:
+        texto = limpiar_formato(_resolver_lang(texto, leer_lang) or texto).strip()
+    return texto
+
+
+def _subpacks(valor, leer_lang) -> tuple[Subpack, ...]:
+    """Las variantes declaradas, con lo justo para elegir una.
+
+    Hay autores que meten la explicación entera dentro del `name`, con saltos de
+    línea: uno de este equipo escribe cuatro párrafos ahí. Para elegir hace falta
+    una línea, así que se corta por el primer salto y lo demás se descarta —lo
+    que explica el pack va en `notas`, que es su sitio—.
+    """
+    subpacks = []
+    for s in valor or []:
+        if not isinstance(s, dict) or not s.get("folder_name"):
+            continue
+        nombre = _texto_localizado(s.get("name"), leer_lang).splitlines()
+        subpacks.append(Subpack(
+            carpeta=str(s["folder_name"]),
+            nombre=(nombre[0].strip() if nombre else "") or str(s["folder_name"]),
+            memoria=s.get("memory_tier") if isinstance(s.get("memory_tier"), int) else None,
+        ))
+    return tuple(subpacks)
 
 
 def _resolver_lang(clave: str, leer_lang) -> str | None:

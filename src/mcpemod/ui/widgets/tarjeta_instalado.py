@@ -12,11 +12,14 @@ from mcpemod.core import Instalado
 from mcpemod.ui import iconos
 from mcpemod.ui.estilo import AMBAR, SOBRE_POZO, TEXTO_SECUNDARIO, VIOLETA
 from mcpemod.ui.widgets.badge import badge
+from mcpemod.ui.widgets.miniatura import Miniatura
 
 
 class TarjetaInstalado(QWidget):
     desinstalar_pedido = Signal(object)
     normalizar_pedido = Signal(object)
+    #: Se ha pulsado la tarjeta: se pide su ficha.
+    abrir = Signal(object)
 
     def __init__(self, pieza: Instalado, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -25,12 +28,26 @@ class TarjetaInstalado(QWidget):
         raiz = QVBoxLayout(self)
         raiz.setContentsMargins(0, 0, 0, 0)
         raiz.addWidget(Pozo(self._contenido()))
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def mouseReleaseEvent(self, evento) -> None:  # noqa: N802 (API de Qt)
+        """Pulsar la tarjeta abre su ficha.
+
+        Los botones se comen su propio clic, así que pulsar «Desinstalar» no
+        abre además la ficha.
+        """
+        if evento.button() == Qt.MouseButton.LeftButton:
+            self.abrir.emit(self._pieza)
+        super().mouseReleaseEvent(evento)
 
     def _contenido(self) -> QWidget:
         contenedor = QWidget()
         layout = QHBoxLayout(contenedor)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(GAP_CELDA)
+
+        layout.addWidget(Miniatura(self._pieza),
+                         alignment=Qt.AlignmentFlag.AlignVCenter)
 
         info = QVBoxLayout()
         info.setSpacing(GAP_CELDA // 4)

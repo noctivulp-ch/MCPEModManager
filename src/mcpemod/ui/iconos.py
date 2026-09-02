@@ -73,6 +73,8 @@ GLOBAL = "casa"
 MUNDO = "cuadricula"
 COPIAR = "copiar"
 BUSCAR = "buscar"
+#: El hueco de la portada cuando el pack no trae ninguna.
+SIN_PORTADA = "imagen"
 
 #: Las cuatro clases de cambio del historial, donde el dibujo es el único
 #: marcador de qué pasó.
