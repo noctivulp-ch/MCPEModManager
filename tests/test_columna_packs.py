@@ -179,3 +179,60 @@ def test_el_desplazamiento_es_proporcional_a_lo_cerca_que_esta_el_borde(columna)
 
     assert abs(columna.paso_de_borde(rozando, banda=56, maximo=22)) < \
            abs(columna.paso_de_borde(pegado, banda=56, maximo=22))
+
+
+def test_cancelar_dura_hasta_que_se_suelta_el_boton(escena, qt_app):
+    """Escape con el botón todavía pulsado, y mover la mano después.
+
+    Es lo normal: se cancela precisamente porque uno ya no quiere soltarlo ahí, y
+    el dedo sigue apretado. Sin veto, el siguiente movimiento volvía a superar el
+    umbral y levantaba el pack otra vez — con el pack ya devuelto a la lista, así
+    que se quedaba escondido y duplicado bajo el puntero.
+    """
+    padre, columna, arrastre = escena
+    fila = columna._filas[1]
+
+    arrastre.empezar(fila, columna, columna.mapToGlobal(QPoint(10, 10)))
+    qt_app.processEvents()
+    arrastre.cancelar()
+
+    # El movimiento que antes lo resucitaba.
+    arrastre.empezar(fila, columna, columna.mapToGlobal(QPoint(10, 200)))
+    qt_app.processEvents()
+
+    assert not arrastre.activo
+    assert fila.isVisible()
+    assert not [c for c in padre.findChildren(Capsula) if c.isVisible()]
+
+
+def test_tras_soltar_el_boton_se_puede_volver_a_arrastrar(escena, qt_app):
+    """El veto lo levanta el `release`, no el tiempo: si no, cancelar una vez
+    dejaría el asa muerta para siempre."""
+    padre, columna, arrastre = escena
+    fila = columna._filas[1]
+
+    arrastre.empezar(fila, columna, columna.mapToGlobal(QPoint(10, 10)))
+    arrastre.cancelar()
+    arrastre.terminar_gesto()          # se suelta el botón
+
+    arrastre.empezar(fila, columna, columna.mapToGlobal(QPoint(10, 10)))
+    qt_app.processEvents()
+
+    assert arrastre.activo
+
+
+def test_cambiar_de_ventana_deshace_el_gesto(escena, qt_app):
+    """Con un pack en el aire, al volver no hay forma de saber si el botón sigue
+    pulsado. La cápsula se quedaba flotando encima de la otra aplicación."""
+    from PySide6.QtCore import QEvent
+
+    padre, columna, arrastre = escena
+    fila = columna._filas[0]
+    arrastre.empezar(fila, columna, columna.mapToGlobal(QPoint(10, 10)))
+    qt_app.processEvents()
+
+    arrastre.eventFilter(padre.window(), QEvent(QEvent.Type.WindowDeactivate))
+    qt_app.processEvents()
+
+    assert not arrastre.activo
+    assert fila.isVisible()

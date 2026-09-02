@@ -126,6 +126,10 @@ class Arrastre(QObject):
         self._hueco: Hueco | None = None
         self._destino = None
         self._posicion = 0
+        #: Cancelado con Escape pero con el botón todavía pulsado. Sin esto, el
+        #: siguiente movimiento del ratón vuelve a superar el umbral y levanta el
+        #: pack otra vez: cancelar duraba hasta que movieras la mano.
+        self._vetado = False
 
         self._reloj = QTimer(self)
         self._reloj.setInterval(INTERVALO)
@@ -141,7 +145,7 @@ class Arrastre(QObject):
     # ── El gesto ──────────────────────────────────────────────────────────────
 
     def empezar(self, fila, columna, global_pos: QPoint) -> None:
-        if self.activo:
+        if self.activo or self._vetado:
             return
         self._fila = fila
         self._origen = columna
@@ -199,16 +203,37 @@ class Arrastre(QObject):
             destino.soltado.emit(pieza.uuid, posicion)
 
     def cancelar(self) -> None:
+        """Escape: el pack vuelve a su sitio y no se mueve nada.
+
+        Queda **vetado** hasta que se suelte el botón. Cancelar y seguir con el
+        dedo apretado es lo normal —se cancela precisamente porque uno ya no
+        quiere soltarlo ahí—, y sin el veto el gesto revivía al mover la mano.
+        """
         fila = self._fila
         self._terminar()
+        self._vetado = True
         if fila is not None:
             fila.show()
+
+    def terminar_gesto(self) -> None:
+        """Se ha soltado el botón, que es lo único que cierra un gesto.
+
+        Suelta el pack si había uno en el aire, y en cualquier caso levanta el
+        veto: a partir de aquí un pinchazo nuevo vuelve a poder arrastrar.
+        """
+        if self.activo:
+            self.soltar()
+        self._vetado = False
 
     def _terminar(self) -> None:
         self._reloj.stop()
         self._escena.window().removeEventFilter(self)
         self._quitar_hueco()
         if self._capsula is not None:
+            # Esconder antes de destruir: `deleteLater` espera al siguiente ciclo
+            # de eventos, y hasta entonces la cápsula se quedaba colgando del
+            # puntero un fotograma después de haber soltado.
+            self._capsula.hide()
             self._capsula.deleteLater()
         self._capsula = None
         self._hueco = None
@@ -248,6 +273,12 @@ class Arrastre(QObject):
             if evento.key() == Qt.Key.Key_Escape:
                 self.cancelar()
                 return True
+
+        elif evento.type() == QEvent.Type.WindowDeactivate:
+            # Cambiar de ventana con un pack en el aire: al volver no hay forma
+            # de saber si el botón sigue pulsado, así que se deshace. La cápsula
+            # se quedaba flotando encima de la otra aplicación.
+            self.cancelar()
 
         return False
 

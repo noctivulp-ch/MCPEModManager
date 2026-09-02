@@ -118,8 +118,8 @@ class Asa(QLabel):
         self._pinchado = None
         self.setCursor(Qt.CursorShape.OpenHandCursor)
         arrastre = self._arrastre()
-        if arrastre is not None and arrastre.activo:
-            arrastre.soltar()
+        if arrastre is not None:
+            arrastre.terminar_gesto()
 
     def _fila_y_columna(self):
         fila = self.parentWidget()

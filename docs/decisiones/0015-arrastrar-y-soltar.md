@@ -80,3 +80,14 @@ lo que cayera por debajo del pack movido se colocaba un sitio más allá del hue
 que se había enseñado. Con el orden decidiendo qué textura se ve, eso no se nota
 hasta entrar al juego. Hay una prueba que lo fija.
 
+**Un gesto lo cierra el `release`, y nada más.** `Escape` deshace el arrastre
+pero el botón sigue pulsado: se cancela precisamente porque uno ya no quiere
+soltarlo ahí, y la mano no se levanta a la vez. El asa conservaba el punto donde
+se pinchó, así que el siguiente movimiento volvía a superar el umbral y levantaba
+el pack otra vez —ya devuelto a la lista, con lo que se quedaba escondido y
+duplicado bajo el puntero—. Cancelar deja el gesto **vetado** hasta que se suelta.
+
+Cambiar de ventana con un pack en el aire lo deshace igual: al volver no hay
+forma de saber si el botón sigue pulsado, y la cápsula se quedaba flotando encima
+de la otra aplicación.
+
