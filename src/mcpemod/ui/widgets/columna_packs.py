@@ -10,15 +10,16 @@ Los packs se mueven de tres maneras, y las tres hacen lo mismo:
 - **Arrastrando por el asa** (`≡`) — a la otra columna para activar o quitar, o
   dentro de la de activos para cambiar el orden. El asa existe para que arrastrar
   no compita con desplazar la lista: agarrar por cualquier sitio haría imposible
-  hacer scroll con el ratón.
+  hacer scroll con el ratón. El gesto lo lleva `arrastre.Arrastre`, que es de
+  quien salen la cápsula, el hueco y el desplazamiento automático.
 - **Con los botones**, para quien no quiera arrastrar.
 - **Copiando y pegando** (`Ctrl+C` / `Ctrl+V`), que pega donde esté el puntero.
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import QMimeData, Qt, Signal
-from PySide6.QtGui import QDrag, QFontMetrics, QMouseEvent
+from PySide6.QtCore import QPoint, Qt, Signal
+from PySide6.QtGui import QFontMetrics, QMouseEvent
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
@@ -33,13 +34,10 @@ from mcpemod.ui import iconos
 from mcpemod.ui.estilo import (
     AMBAR, SOBRE_BANDEJA, TEXTO_EN_POZO, TEXTO_SECUNDARIO, VIOLETA,
 )
+from mcpemod.ui.widgets.arrastre import UMBRAL
 from mcpemod.ui.widgets.badge import badge
 from mcpemod.ui.widgets.lista_por_categoria import agrupar, cabecera
 
-
-#: Con qué se identifica un pack al arrastrarlo. Un tipo propio para que no se
-#: confunda con texto arrastrado desde fuera de la app.
-MIME_PACK = "application/x-mcpemod-pack"
 
 class NombreElidido(QLabel):
     """El nombre del pack, recortado con puntos suspensivos al ancho que le toque.
@@ -73,9 +71,8 @@ class Asa(QLabel):
     cualquier parte de la fila, desplazar la lista con el ratón sería imposible.
     """
 
-    def __init__(self, uuid: str, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._uuid = uuid
         self.setToolTip("Arrastra para mover o cambiar de lado")
         self.setCursor(Qt.CursorShape.OpenHandCursor)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -87,20 +84,56 @@ class Asa(QLabel):
                 IconoTamano.CHICO, IconoTamano.CHICO
             )
         )
+        self._pinchado: QPoint | None = None
 
     def mousePressEvent(self, evento: QMouseEvent) -> None:  # noqa: N802 (API de Qt)
         if evento.button() != Qt.MouseButton.LeftButton:
             return
-        datos = QMimeData()
-        datos.setData(MIME_PACK, self._uuid.encode())
+        self._pinchado = evento.globalPosition().toPoint()
+        self.setCursor(Qt.CursorShape.ClosedHandCursor)
 
-        arrastre = QDrag(self)
-        arrastre.setMimeData(datos)
-        # La miniatura es la fila entera, no el asa: se arrastra el pack.
+    def mouseMoveEvent(self, evento: QMouseEvent) -> None:  # noqa: N802 (API de Qt)
+        """Mientras el botón siga pulsado, los eventos llegan aquí.
+
+        Es el agarre implícito de Qt: quien recibe el `press` recibe todo el
+        movimiento hasta el `release`, esté el puntero donde esté. Por eso el asa
+        puede conducir un arrastre que acaba en la otra columna.
+        """
+        if self._pinchado is None:
+            return
+        ahora = evento.globalPosition().toPoint()
+        arrastre = self._arrastre()
+        if arrastre is None:
+            return
+        if not arrastre.activo:
+            if (ahora - self._pinchado).manhattanLength() < UMBRAL:
+                return
+            fila, columna = self._fila_y_columna()
+            if fila is None or columna is None:
+                return
+            arrastre.empezar(fila, columna, ahora)
+        arrastre.mover(ahora)
+
+    def mouseReleaseEvent(self, evento: QMouseEvent) -> None:  # noqa: N802 (API de Qt)
+        self._pinchado = None
+        self.setCursor(Qt.CursorShape.OpenHandCursor)
+        arrastre = self._arrastre()
+        if arrastre is not None and arrastre.activo:
+            arrastre.soltar()
+
+    def _fila_y_columna(self):
         fila = self.parentWidget()
-        if fila is not None:
-            arrastre.setPixmap(fila.grab())
-        arrastre.exec(Qt.DropAction.MoveAction)
+        while fila is not None and not isinstance(fila, FilaPack):
+            fila = fila.parentWidget()
+        columna = fila
+        while columna is not None and not isinstance(columna, ColumnaPacks):
+            columna = columna.parentWidget()
+        return fila, columna
+
+    def _arrastre(self):
+        """El coordinador del gesto, que vive en el panel y no en la columna."""
+        _, columna = self._fila_y_columna()
+        return columna.arrastre if columna is not None else None
 
 
 class FilaPack(QWidget):
@@ -135,7 +168,7 @@ class FilaPack(QWidget):
         fila.setSpacing(GAP_CELDA // 2)
 
         if self._pieza.uuid:
-            fila.addWidget(Asa(self._pieza.uuid, contenedor))
+            fila.addWidget(Asa(contenedor))
 
         info = QVBoxLayout()
         info.setSpacing(2)
@@ -224,7 +257,9 @@ class ColumnaPacks(QWidget):
         super().__init__(parent)
         self._vacio = vacio
         self._filas: list[FilaPack] = []
-        self.setAcceptDrops(True)
+        #: Lo pone el panel: el gesto cruza de una columna a la otra, así que
+        #: quien lo lleva tiene que estar por encima de las dos.
+        self.arrastre = None
 
         raiz = QVBoxLayout(self)
         raiz.setContentsMargins(0, 0, 0, 0)
@@ -234,7 +269,7 @@ class ColumnaPacks(QWidget):
         raiz.addWidget(self._titulo)
         self._encabezado = titulo
 
-        scroll = QScrollArea()
+        self._scroll = scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         # La columna nunca desplaza en horizontal: lo que no cabe se recorta.
@@ -265,21 +300,62 @@ class ColumnaPacks(QWidget):
 
     # ── Arrastrar, soltar y pegar ─────────────────────────────────────────────
 
-    def dragEnterEvent(self, evento) -> None:  # noqa: N802 (API de Qt)
-        if evento.mimeData().hasFormat(MIME_PACK):
-            evento.acceptProposedAction()
+    # ── Lo que necesita el coordinador del arrastre ──────────────────────────
 
-    def dragMoveEvent(self, evento) -> None:  # noqa: N802 (API de Qt)
-        if evento.mimeData().hasFormat(MIME_PACK):
-            evento.acceptProposedAction()
+    def indice_en(self, global_pos: QPoint) -> int:
+        """En qué hueco de la lista cae ese punto de la pantalla."""
+        return self._posicion_en(self.mapFromGlobal(global_pos).y())
 
-    def dropEvent(self, evento) -> None:  # noqa: N802 (API de Qt)
-        datos = evento.mimeData()
-        if not datos.hasFormat(MIME_PACK):
+    def poner_hueco(self, hueco: QWidget, posicion: int) -> None:
+        """Deja el hueco en esa posición, y solo si no estaba ya ahí.
+
+        La comprobación no es un ahorro: reinsertarlo en cada movimiento del
+        ratón lo hace parpadear.
+        """
+        if self._lista.indexOf(hueco) == self._indice_de_layout(posicion):
             return
-        evento.acceptProposedAction()
-        uuid = bytes(datos.data(MIME_PACK)).decode()
-        self.soltado.emit(uuid, self._posicion_en(evento.position().toPoint().y()))
+        if hueco.parent() is not None:
+            hueco.setParent(None)
+        self._lista.insertWidget(self._indice_de_layout(posicion), hueco)
+
+    def desplazar(self, delta: int) -> None:
+        barra = self._scroll.verticalScrollBar()
+        barra.setValue(barra.value() + delta)
+
+    def paso_de_borde(self, global_pos: QPoint, banda: int, maximo: int) -> int:
+        """Cuánto desplazar por estar cerca de un borde. 0 si no toca.
+
+        Proporcional a lo metido que esté el puntero en la banda: rozándola va
+        despacio y pegado al borde va rápido. A saltos fijos es imposible parar
+        donde uno quiere.
+        """
+        vista = self._scroll.viewport()
+        local = vista.mapFromGlobal(global_pos)
+        if not vista.rect().contains(QPoint(vista.width() // 2, local.y())):
+            return 0
+
+        if local.y() < banda:
+            return -round(maximo * (banda - local.y()) / banda)
+        desde_abajo = vista.height() - local.y()
+        if desde_abajo < banda:
+            return round(maximo * (banda - desde_abajo) / banda)
+        return 0
+
+    def _indice_de_layout(self, posicion: int) -> int:
+        """De «entre la fila visible N y la N+1» al índice del layout.
+
+        No coinciden: en medio hay cabeceras de categoría, avisos y el propio
+        hueco, que no son filas pero sí ocupan un sitio en el layout.
+        """
+        vistas = 0
+        for i in range(self._lista.count()):
+            widget = self._lista.itemAt(i).widget()
+            if not isinstance(widget, FilaPack) or not widget.isVisible():
+                continue
+            if vistas == posicion:
+                return i
+            vistas += 1
+        return max(0, self._lista.count() - 1)   # antes del `addStretch` final
 
     def pegar_en_el_puntero(self, uuid: str) -> None:
         """Coloca `uuid` donde esté el ratón. Es el `Ctrl+V`."""
@@ -292,14 +368,21 @@ class ColumnaPacks(QWidget):
         Se compara con el centro de cada fila: soltar en la mitad de arriba pone
         antes, en la de abajo pone después, que es lo que uno espera al colocar
         algo entre dos cosas.
+
+        Cuenta **solo las filas visibles**, porque la que se está arrastrando
+        está escondida y quien recibe esta posición la reinserta sobre una lista
+        de la que ya la ha quitado. Contando las ocultas, todo lo que cayera por
+        debajo del pack movido se colocaba un sitio más allá.
         """
-        for indice, fila in enumerate(self._filas):
+        visibles = 0
+        for fila in self._filas:
             if not fila.isVisible():
                 continue
             centro = fila.mapTo(self, fila.rect().center()).y()
             if y_en_la_columna < centro:
-                return indice
-        return len(self._filas)
+                return visibles
+            visibles += 1
+        return visibles
 
     def _construir(self, piezas, activo, desfases, agrupado, nota) -> list[QWidget]:
         widgets: list[QWidget] = []

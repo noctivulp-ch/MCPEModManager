@@ -43,3 +43,40 @@ equivocarse es la decisión, no que Qt entregue el evento. Se prueba sin ventana
 
 Soltar varios elementos a la vez funciona y se procesan de uno en uno; el aviso
 final los resume en vez de encadenar mensajes.
+
+---
+
+## Revisión (2026-09-01): el gesto se lleva a mano, sin `QDrag`
+
+`QDrag.exec()` abre un bucle de eventos **modal** de la plataforma. Mientras
+dura no llega nada que no sea del propio arrastre, y eso costaba cuatro cosas:
+
+- Sosteniendo un pack no se podía girar la rueda para desplazar la lista, que es
+  justo cuando hace falta: el sitio donde quieres soltarlo casi nunca está en
+  pantalla.
+- La fila seguía en su sitio mientras una copia colgaba del puntero, así que el
+  mismo pack se veía dos veces.
+- Lo único que la API deja pintar es una miniatura pegada al cursor. No hay forma
+  de enseñar dónde va a caer.
+- Tampoco de desplazar la lista solo al acercarse al borde.
+
+Ahora lo lleva `ui/widgets/arrastre.py` con los eventos de ratón de siempre,
+apoyado en el **agarre implícito** de Qt: quien recibe el `press` recibe todo el
+movimiento hasta el `release`, esté el puntero donde esté. Por eso el asa puede
+conducir un gesto que acaba en la otra columna.
+
+Con eso: la fila se esconde al levantarla, lo que se sostiene es una **cápsula**
+—nombre y versión, sin botones, porque en el agarre no se pulsa nada—, un
+**hueco** con la altura real enseña dónde va a caer, y cerca del borde la lista
+avanza sola, con un paso proporcional a lo metido que esté el puntero en la
+banda. `Escape` cancela y devuelve el pack a su sitio.
+
+No se pierde nada: `QDrag` sirve para llevar algo a **otra aplicación**, y este
+gesto nunca sale de la ventana.
+
+El cambio destapó un fallo de conteo que antes no podía darse: `_posicion_en`
+contaba también las filas ocultas, y como ahora la que se arrastra lo está, todo
+lo que cayera por debajo del pack movido se colocaba un sitio más allá del hueco
+que se había enseñado. Con el orden decidiendo qué textura se ve, eso no se nota
+hasta entrar al juego. Hay una prueba que lo fija.
+

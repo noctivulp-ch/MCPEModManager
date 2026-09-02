@@ -30,6 +30,7 @@ from mcpemod.senales import conectar
 from mcpemod.ui import iconos
 from mcpemod.ui.estilo import SOBRE_BANDEJA, TEXTO_SECUNDARIO
 from mcpemod.ui.widgets import ColumnaPacks
+from mcpemod.ui.widgets.arrastre import Arrastre
 
 _SIN_COMPORTAMIENTO = (
     "Los packs de comportamiento no se activan aquí: cambian el contenido del "
@@ -172,6 +173,12 @@ class PanelActivacion(QWidget):
         conectar(self._activos.accion, self._al_pedir)
         conectar(self._inactivos.soltado, lambda u, i: self._al_soltar(u, i, activar=False))
         conectar(self._activos.soltado, lambda u, i: self._al_soltar(u, i, activar=True))
+
+        # El coordinador del arrastre vive aquí y no en una columna: el gesto
+        # empieza en una y acaba en la otra, y la de origen no puede saber dónde.
+        self._arrastre = Arrastre(self)
+        self._arrastre.registrar(self._inactivos, self._activos)
+        self._inactivos.arrastre = self._activos.arrastre = self._arrastre
         columnas.addWidget(self._inactivos)
         columnas.addWidget(self._activos)
 
