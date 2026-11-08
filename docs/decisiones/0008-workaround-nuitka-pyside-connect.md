@@ -24,7 +24,7 @@ métodos distintos. Se vio al añadir la pestaña de actualizaciones, que conect
 tres slots seguidos y moría en el segundo. No hay presupuesto de «una conexión
 gratis»: ninguna vale.
 
-Es lo que hacía que la app compilara sin arrancar. `scripts/repro_nuitka_pyside_connect.py`
+Es lo que hacía que la app compilara sin arrancar. `tools/repro_nuitka_pyside_connect.py`
 lo reproduce en 40 líneas sin nada del proyecto, y muestra que conectar una lambda
 que llame al método funciona sin problema.
 
@@ -50,7 +50,7 @@ Un ejecutable que compila y no arranca deja de ser algo que se descubre al abrir
 
 Dos redes, porque la única forma de notarlo es compilando:
 
-- **`scripts/lint_conexiones.py`**, que `check.sh` ejecuta sobre `src/`: recorre
+- **`tools/lint_conexiones.py`**, que `check.sh` ejecuta sobre `src/`: recorre
   el árbol de sintaxis y avisa de cualquier `connect` cuyo primer argumento sea
   un `objeto.metodo`.
 - **`build.sh` ejecuta el binario ya compilado con `--autotest`**, y ese autotest
@@ -66,7 +66,7 @@ traceback, y por eso una versión rota llegó a darse por buena.
 
 Una indirección en cada conexión, y un helper que existe solo por un bug externo —
 por eso lleva escrito el porqué y el repro al lado. Cuando una versión nueva del
-toolchain lo arregle (`python scripts/repro_nuitka_pyside_connect.py` compilado
+toolchain lo arregle (`python tools/repro_nuitka_pyside_connect.py` compilado
 pasa), `conectar()` se retira y se vuelve a `senal.connect(slot)`.
 
 Lo que más costó es que este fallo y el de los hilos tiran en direcciones

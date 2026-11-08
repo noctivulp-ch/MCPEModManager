@@ -24,7 +24,7 @@ end
 
 # 1. Sintaxis — detecta SyntaxError en todos los archivos
 paso "Sintaxis"
-set archivos (find $SRC $PROYECTO/tests $PROYECTO/scripts -name "*.py" -not -path "*/__pycache__/*")
+set archivos (find $SRC $PROYECTO/tests $PROYECTO/tools -name "*.py" -not -path "*/__pycache__/*")
 set errores_sintaxis 0
 for f in $archivos
     set salida (python -m py_compile $f 2>&1)
@@ -57,7 +57,7 @@ end
 # 3. Pyflakes — nombres sin definir, imports sin usar
 paso "Pyflakes"
 if command -q pyflakes
-    set salida (env $ENTORNO pyflakes $SRC $PROYECTO/tests $PROYECTO/scripts 2>&1)
+    set salida (env $ENTORNO pyflakes $SRC $PROYECTO/tests $PROYECTO/tools 2>&1)
     if test -z "$salida"
         ok "sin advertencias"
     else
@@ -75,7 +75,7 @@ end
 # Conectar un método de objeto rompe el binario compilado a la segunda vez, y en
 # el intérprete no se nota: la ventana simplemente no abre al compilar.
 paso "Conexiones de señal"
-set salida (env $ENTORNO python "$PROYECTO/scripts/lint_conexiones.py" $SRC 2>&1)
+set salida (env $ENTORNO python "$PROYECTO/tools/lint_conexiones.py" $SRC 2>&1)
 if test $status -eq 0
     ok "todas pasan por senales.conectar"
 else

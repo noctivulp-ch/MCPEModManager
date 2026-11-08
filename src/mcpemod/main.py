@@ -17,10 +17,11 @@ except ImportError:
 
 from PySide6.QtWidgets import QApplication, QMessageBox  # noqa: E402
 
-from wulf_qt import Acento, Modo, aplicar  # noqa: E402
+from wulf_qt import aplicar  # noqa: E402
 
 from mcpemod.core import DB_PATH, Installer, Scanner, Store, detectar_instalaciones  # noqa: E402
 from mcpemod.ui import VentanaPrincipal  # noqa: E402
+from mcpemod.ui.estilo import ACENTO, MODO  # noqa: E402
 
 _SIN_JUEGO = (
     "No encontré ninguna instalación de Minecraft Bedrock.\n\n"
@@ -180,7 +181,7 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("MCPE Mod Manager")
     app.setOrganizationName("mcpemod")
-    aplicar(app, Acento.ORO, Modo.OSCURO)
+    aplicar(app, ACENTO, MODO)
 
     instalaciones = detectar_instalaciones()
     if not instalaciones:

@@ -25,7 +25,7 @@ MCPEModManager/
 ├── check.sh                # estático + pruebas + arranque real de la UI
 ├── build.sh                # Nuitka onefile, y comprueba que el binario arranca
 ├── docs/                   # Esta documentación
-├── scripts/                # Sondas de diagnóstico
+├── tools/                  # lint de conexiones, repro de Nuitka, capturas del README
 ├── src/mcpemod/
 │   ├── core/
 │   │   ├── manifiesto.py   # Lectura del manifest.json — la identidad
@@ -144,7 +144,7 @@ Los unitarios no tocan el juego: construyen una instalación falsa en `tmp_path`
 `QApplication`, y existe porque los fallos que dejaron una versión sin arrancar
 (llamadas a `wulf_qt` con firmas equivocadas) no los ve ni pyflakes ni pytest.
 
-Para comprobar contra datos reales:
+Para comprobar contra datos reales, con las sondas locales de `scripts/` (no se publican):
 
 ```bash
 python scripts/auditar_instalacion.py   # solo lectura, no toca nada

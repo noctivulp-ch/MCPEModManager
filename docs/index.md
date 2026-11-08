@@ -21,6 +21,7 @@ real:
   qué se aplica, global y por mundo, y por qué los mundos se desfasan
 - [Gestión de contenido](funciones/gestion-contenido.md) — reconocer, instalar,
   actualizar desde los catálogos, desinstalar, versiones, historial
+- [Tema](funciones/tema.md) — modo claro u oscuro y metal de acento, con `MCPEMOD_TEMA`
 
 ## Ideas
 
@@ -37,8 +38,9 @@ real:
 |---|---|
 | `fish check.sh` | Sintaxis, importaciones, pyflakes, pruebas y arranque real de la UI |
 | `fish build.sh` | Compila con Nuitka y comprueba que el binario arranca |
-| `scripts/auditar_instalacion.py` | Audita las instalaciones reales, en solo lectura |
-| `scripts/respaldo.py` | Copia de seguridad de lo que el gestor puede tocar, con inventario comparable |
+| `scripts/auditar_instalacion.py` | Audita las instalaciones reales, en solo lectura (sonda local, no se publica) |
+| `scripts/respaldo.py` | Copia de seguridad de lo que el gestor puede tocar, con inventario comparable (sonda local, no se publica) |
 | `mcpemod --diagnostico` | Instalaciones, contenido, caché y estado de la red |
-| `scripts/captura_ui.py` | Captura la ventana en un PNG, sin pantalla |
-| `scripts/repro_nuitka_pyside_connect.py` | Repro del fallo de Nuitka que documenta la ADR 0008 |
+| `tools/capturas/capturas.py` | Regenera las capturas del README en `docs/capturas/`, sin pantalla |
+| `tools/lint_conexiones.py` | Busca conexiones de señal que romperían el binario; lo corre `check.sh` |
+| `tools/repro_nuitka_pyside_connect.py` | Repro del fallo de Nuitka que documenta la ADR 0008 |

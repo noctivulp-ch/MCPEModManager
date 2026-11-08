@@ -28,6 +28,24 @@ def qt_app():
     return QApplication.instance() or QApplication([])
 
 
+@pytest.fixture(autouse=True)
+def _sin_widgets_huerfanos(qt_app):
+    """Los widgets de cada prueba se destruyen con ella, no al cerrar el intérprete.
+
+    Una tarjeta conecta las señales de sus filas con lambdas que la nombran: ese
+    ciclo pasa por C++ y el recolector de Python no lo ve, así que sin padre la
+    tarjeta seguía viva hasta el final. Con PySide6 6.12, destruirla al desmontar
+    la `QApplication` reventaba el proceso tras pasar todas las pruebas: pytest
+    salía con 139 y `check.sh` daba fallo.
+    """
+    yield
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    for widget in QApplication.topLevelWidgets():
+        widget.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+
+
 CON_VARIANTES = dict(subpacks=[
     {"folder_name": "sp1", "name": "Una"},
     {"folder_name": "sp2", "name": "Otra"},

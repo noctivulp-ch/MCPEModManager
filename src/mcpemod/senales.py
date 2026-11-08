@@ -9,7 +9,7 @@ La primera conexión deja una excepción pendiente a nivel C y la siguiente llam
 al descriptor explota. Interpretado no pasa; compilado sí, y en sitios normales:
 un panel que se suscribe a dos señales, o un panel que escucha a sus N tarjetas.
 
-`scripts/repro_nuitka_pyside_connect.py` reproduce el fallo sin nada del proyecto
+`tools/repro_nuitka_pyside_connect.py` reproduce el fallo sin nada del proyecto
 y sirve para comprobar si una versión nueva del toolchain ya lo arregla — cuando
 así sea, esto se retira y se vuelve a `senal.connect(slot)` directo.
 """

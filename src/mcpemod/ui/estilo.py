@@ -7,10 +7,25 @@ la laca en vez de inventar grises que no pertenecen al sistema.
 
 from __future__ import annotations
 
+import os
+
 from wulf_qt.tokens import LACAS, METALES, SOBRE_METAL, Acento, Modo
 
-MODO = Modo.OSCURO
-ACENTO = Acento.ORO
+
+def _tema_elegido() -> tuple[Modo, Acento]:
+    """`MCPEMOD_TEMA=claro-peltre`; por defecto, oscuro con oro.
+
+    Se lee una sola vez, al importar: los colores de abajo se copian en los
+    widgets al construirlos. Ver docs/funciones/tema.md.
+    """
+    modo, _, acento = os.environ.get("MCPEMOD_TEMA", "").partition("-")
+    try:
+        return Modo(modo or Modo.OSCURO.value), Acento(acento or Acento.ORO.value)
+    except ValueError:
+        return Modo.OSCURO, Acento.ORO
+
+
+MODO, ACENTO = _tema_elegido()
 LACA = LACAS[MODO]
 
 METAL = METALES[ACENTO][MODO]

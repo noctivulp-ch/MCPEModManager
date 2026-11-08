@@ -1,0 +1,21 @@
+MCPEModManager
+Copyright (C) 2026 NoctiVulp
+
+This program is free software: you can redistribute it and/or modify it under the terms of the
+GNU General Public License as published by the Free Software Foundation,
+either version 3 of the License, or (at your option) any later version.
+SPDX-License-Identifier: GPL-3.0-or-later
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+El nombre «NoctiVulp», el de este programa y sus logotipos no se licencian: ver TRADEMARKS.md.
+
+Componentes de terceros
+-----------------------
+
+- PySide6 (Qt for Python) — LGPL-3.0; se instala aparte. El binario de Nuitka lo incluye, y con este código fuente se puede recompilar contra otra versión de Qt
+- Wulfenite UI (wulf_qt) — LGPL-3.0-or-later, de NoctiVulp; se instala desde github.com/noctivulp-ch/wulfenite_ui
+- packaging — Apache-2.0 / BSD-2-Clause
+- Python (intérprete incluido en el binario de Nuitka) — PSF-2.0
+- Minecraft, sus packs y los catálogos de MCPEDL y CurseForge no se incluyen: los packs los aporta el usuario y conservan la licencia de sus autores

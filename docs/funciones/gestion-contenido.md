@@ -86,7 +86,7 @@ El botón **Extraer** deja las dos últimas como la primera. No las arregla: las
 uniforma, para que actualizarlas y desinstalarlas funcione igual que con el
 resto. Ver [ADR 0014](../decisiones/0014-forma-de-instalacion.md).
 
-`scripts/auditar_instalacion.py` las enumera sin tocar nada.
+La sonda local `scripts/auditar_instalacion.py` (no se publica) las enumera sin tocar nada.
 
 ## La página del pack
 
